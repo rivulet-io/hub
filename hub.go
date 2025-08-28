@@ -3,14 +3,11 @@ package hub
 import (
 	crand "crypto/rand"
 	"fmt"
-	"math"
-	"math/rand/v2"
 	"net/url"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"gosuda.org/randflake"
 )
 
 const HubClusterName = "hubstream"
@@ -47,16 +44,11 @@ type Options struct {
 }
 
 func DefaultOptions() (*Options, error) {
+	// Generate a simple unique ID using timestamp and random bytes
 	secret := [32]byte{}
 	crand.Read(secret[:])
-	generator, err := randflake.NewGenerator(rand.Int64(), 0, math.MaxInt64, secret[:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ID generator: %w", err)
-	}
-	id, err := generator.GenerateString()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate ID: %w", err)
-	}
+	id := fmt.Sprintf("hub-%d-%x", time.Now().UnixNano(), secret[:4])
+
 	return &Options{
 		Name:       id,
 		Host:       "0.0.0.0",
@@ -71,7 +63,7 @@ func DefaultOptions() (*Options, error) {
 		JetstreamMaxStorage:   NewSizeFromGigabytes(10),
 		StreamMaxBufferedMsgs: 65536,
 		StreamMaxBufferedSize: 64 * 1024 * 1024,
-		StoreDir:              "data",
+		StoreDir:              "./data",
 		SyncInterval:          2 * time.Second,
 		SyncAlways:            false,
 
@@ -90,6 +82,10 @@ type Hub struct {
 }
 
 func NewHub(opt *Options) (*Hub, error) {
+	if opt == nil {
+		return nil, fmt.Errorf("options cannot be nil")
+	}
+
 	natsServerOpts := &server.Options{
 		ServerName:    opt.Name,
 		Host:          opt.Host,
@@ -133,7 +129,8 @@ func NewHub(opt *Options) (*Hub, error) {
 
 	go svr.Start()
 
-	if !svr.ReadyForConnections(10 * time.Second) {
+	// Increase timeout for server startup
+	if !svr.ReadyForConnections(30 * time.Second) {
 		return nil, fmt.Errorf("NATS server failed to start in time")
 	}
 
