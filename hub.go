@@ -130,6 +130,12 @@ func NewHub(opt *Options) (*Hub, error) {
 		return nil, fmt.Errorf("failed to create NATS server: %w", err)
 	}
 
+	go svr.Start()
+
+	if !svr.ReadyForConnections(10 * time.Second) {
+		return nil, fmt.Errorf("NATS server failed to start in time")
+	}
+
 	conn, err := nats.Connect(svr.ClientURL(), nats.InProcessServer(svr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create in-process NATS connection: %w", err)
@@ -145,4 +151,9 @@ func NewHub(opt *Options) (*Hub, error) {
 		inProcessConn: conn,
 		jetstreamCtx:  js,
 	}, nil
+}
+
+func (h *Hub) Shutdown() {
+	h.inProcessConn.Close()
+	h.server.Shutdown()
 }
