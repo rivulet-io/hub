@@ -83,6 +83,7 @@ func DefaultOptions() (*Options, error) {
 }
 
 type Hub struct {
+	options       *Options
 	server        *server.Server
 	inProcessConn *nats.Conn
 	jetstreamCtx  nats.JetStreamContext
@@ -147,6 +148,7 @@ func NewHub(opt *Options) (*Hub, error) {
 	}
 
 	return &Hub{
+		options:       opt,
 		server:        svr,
 		inProcessConn: conn,
 		jetstreamCtx:  js,
