@@ -4,6 +4,9 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
@@ -11,6 +14,50 @@ import (
 )
 
 const HubClusterName = "hubstream"
+const HubIDFile = "hub.id"
+
+// readHubID reads the hub ID from file, returns empty string if file doesn't exist
+func readHubID(dataDir string) (string, error) {
+	idFile := filepath.Join(dataDir, HubIDFile)
+	if _, err := os.Stat(idFile); os.IsNotExist(err) {
+		return "", nil // File doesn't exist, will create new ID
+	}
+
+	data, err := os.ReadFile(idFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read hub ID file: %w", err)
+	}
+
+	id := strings.TrimSpace(string(data))
+	if id == "" {
+		return "", fmt.Errorf("hub ID file is empty")
+	}
+
+	return id, nil
+}
+
+// writeHubID writes the hub ID to file
+func writeHubID(dataDir, id string) error {
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	idFile := filepath.Join(dataDir, HubIDFile)
+	if err := os.WriteFile(idFile, []byte(id+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write hub ID file: %w", err)
+	}
+
+	return nil
+}
+
+// generateHubID generates a new unique hub ID
+func generateHubID() (string, error) {
+	secret := [32]byte{}
+	if _, err := crand.Read(secret[:]); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return fmt.Sprintf("hub-%d-%x", time.Now().UnixNano(), secret[:4]), nil
+}
 
 type Options struct {
 	Name               string
@@ -44,13 +91,31 @@ type Options struct {
 }
 
 func DefaultOptions() (*Options, error) {
-	// Generate a simple unique ID using timestamp and random bytes
-	secret := [32]byte{}
-	crand.Read(secret[:])
-	id := fmt.Sprintf("hub-%d-%x", time.Now().UnixNano(), secret[:4])
+	// Try to read existing hub ID from file
+	dataDir := "./data"
+	existingID, err := readHubID(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read hub ID: %w", err)
+	}
+
+	var hubID string
+	if existingID != "" {
+		// Use existing ID from file
+		hubID = existingID
+	} else {
+		// Generate new ID and save to file
+		hubID, err = generateHubID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate hub ID: %w", err)
+		}
+
+		if err := writeHubID(dataDir, hubID); err != nil {
+			return nil, fmt.Errorf("failed to save hub ID: %w", err)
+		}
+	}
 
 	return &Options{
-		Name:       id,
+		Name:       hubID,
 		Host:       "0.0.0.0",
 		Port:       4222,
 		MaxPayload: NewSizeFromMegabytes(8),
@@ -63,7 +128,7 @@ func DefaultOptions() (*Options, error) {
 		JetstreamMaxStorage:   NewSizeFromGigabytes(10),
 		StreamMaxBufferedMsgs: 65536,
 		StreamMaxBufferedSize: 64 * 1024 * 1024,
-		StoreDir:              "./data",
+		StoreDir:              dataDir,
 		SyncInterval:          2 * time.Second,
 		SyncAlways:            false,
 
