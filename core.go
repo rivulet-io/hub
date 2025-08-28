@@ -7,7 +7,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-func (h *Hub) SubscribeVolatileViaBroadcast(subject string, handler func(subject string, msg []byte) ([]byte, bool), errHandler func(error)) (cancel func(), err error) {
+func (h *Hub) SubscribeVolatileViaFanout(subject string, handler func(subject string, msg []byte) ([]byte, bool), errHandler func(error)) (cancel func(), err error) {
 	sub, err := h.inProcessConn.Subscribe(subject, func(msg *nats.Msg) {
 		response, ok := handler(msg.Subject, msg.Data)
 		if !ok || msg.Reply == "" {
