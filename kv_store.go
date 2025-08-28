@@ -28,7 +28,8 @@ func (h *Hub) CreateOrUpdateKeyValueStore(config KeyValueStoreConfig) error {
 		Placement: &nats.Placement{
 			Cluster: HubClusterName,
 		},
-		History: 1,
+		History:     1,
+		Compression: true,
 	}
 	_, err := h.jetstreamCtx.CreateKeyValue(storeConfig)
 	if err != nil {
