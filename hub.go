@@ -85,6 +85,7 @@ func DefaultOptions() (*Options, error) {
 type Hub struct {
 	server        *server.Server
 	inProcessConn *nats.Conn
+	jetstreamCtx  nats.JetStreamContext
 }
 
 func NewHub(opt *Options) (*Hub, error) {
@@ -134,8 +135,14 @@ func NewHub(opt *Options) (*Hub, error) {
 		return nil, fmt.Errorf("failed to create in-process NATS connection: %w", err)
 	}
 
+	js, err := conn.JetStream()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
+	}
+
 	return &Hub{
 		server:        svr,
 		inProcessConn: conn,
+		jetstreamCtx:  js,
 	}, nil
 }
