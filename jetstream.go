@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -67,7 +68,18 @@ type PersistentConfig struct {
 }
 
 func (h *Hub) CreateOrUpdatePersistent(cfg *PersistentConfig) error {
+	if len(cfg.Subjects) == 0 {
+		return fmt.Errorf("subjects cannot be empty")
+	}
+
+	// Use first subject as stream name (remove wildcards)
+	streamName := cfg.Subjects[0]
+	if idx := strings.Index(streamName, "."); idx > 0 {
+		streamName = streamName[:idx]
+	}
+
 	sc := &nats.StreamConfig{
+		Name:              streamName,
 		Description:       cfg.Description,
 		Subjects:          cfg.Subjects,
 		Retention:         cfg.Retention,
@@ -84,6 +96,7 @@ func (h *Hub) CreateOrUpdatePersistent(cfg *PersistentConfig) error {
 		Duplicates:        cfg.Duplicates,
 		Metadata:          cfg.Metadata,
 	}
+
 	_, err := h.jetstreamCtx.AddStream(sc)
 	if err != nil {
 		if err == nats.ErrStreamNameAlreadyInUse {
@@ -91,6 +104,8 @@ func (h *Hub) CreateOrUpdatePersistent(cfg *PersistentConfig) error {
 			if err != nil {
 				return fmt.Errorf("failed to update stream: %w", err)
 			}
+		} else {
+			return fmt.Errorf("failed to create stream: %w", err)
 		}
 	}
 
