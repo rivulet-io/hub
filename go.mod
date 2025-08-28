@@ -5,7 +5,6 @@ go 1.25.0
 require (
 	github.com/nats-io/nats-server/v2 v2.11.8
 	github.com/nats-io/nats.go v1.45.0
-	gosuda.org/randflake v1.6.2
 )
 
 require (
