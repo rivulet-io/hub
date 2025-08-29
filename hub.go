@@ -233,6 +233,8 @@ func NewHub(opt *Options) (*Hub, error) {
 		Authorization: opt.AuthorizationToken,
 		MaxPayload:    int32(opt.MaxPayload.Bytes()),
 
+		NoSystemAccount: true,
+
 		Routes: opt.Routes,
 
 		NoLog:        opt.LogFile == "",
