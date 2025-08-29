@@ -252,7 +252,7 @@ func NewHub(opt *Options) (*Hub, error) {
 			PingInterval: opt.ClusterPingInterval,
 		},
 
-		JetStream:             true,
+		JetStream:             func() bool { return len(opt.LeafNodeRoutes) == 0 }(),
 		StoreDir:              opt.StoreDir,
 		JetStreamMaxMemory:    int64(opt.JetstreamMaxMemory.Bytes()),
 		JetStreamMaxStore:     opt.JetstreamMaxStorage.Bytes(),
