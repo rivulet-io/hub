@@ -76,7 +76,7 @@ func main() {
 }
 
 func testBasicHubCreation(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -96,7 +96,7 @@ func testBasicHubCreation(tempDir string) error {
 }
 
 func testJetStreamOperations(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -173,7 +173,7 @@ func testJetStreamOperations(tempDir string) error {
 }
 
 func testClusterCommunication(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -225,7 +225,7 @@ func testClusterCommunication(tempDir string) error {
 }
 
 func testKeyValueStore(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -276,7 +276,7 @@ func testKeyValueStore(tempDir string) error {
 }
 
 func testObjectStore(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -330,7 +330,7 @@ func testObjectStore(tempDir string) error {
 }
 
 func testErrorHandling(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -384,7 +384,7 @@ func testErrorHandling(tempDir string) error {
 }
 
 func testConcurrentOperations(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -467,7 +467,7 @@ func testConcurrentOperations(tempDir string) error {
 }
 
 func testPerformance(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -566,7 +566,7 @@ func testPerformance(tempDir string) error {
 }
 
 func testEdgeCases(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -647,7 +647,7 @@ func testRecoveryScenarios(tempDir string) error {
 	fmt.Println("Testing recovery scenarios...")
 
 	// Test 1: Hub restart recovery
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -725,7 +725,7 @@ func testConfigurationValidation(tempDir string) error {
 	fmt.Printf("✓ Correctly rejected nil options: %v\n", err)
 
 	// Test 2: Valid minimal configuration
-	validOpts, err := hub.DefaultOptions()
+	validOpts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -755,7 +755,7 @@ func testConfigurationValidation(tempDir string) error {
 }
 
 func testRetentionPolicies(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -864,7 +864,7 @@ func testRetentionPolicies(tempDir string) error {
 }
 
 func testStreamManagement(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -929,7 +929,7 @@ func testStreamManagement(tempDir string) error {
 }
 
 func testConsumerManagement(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -1001,7 +1001,7 @@ func testConsumerManagement(tempDir string) error {
 }
 
 func testLoadBalancing(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
@@ -1074,7 +1074,7 @@ func testLoadBalancing(tempDir string) error {
 }
 
 func testNetworkResilience(tempDir string) error {
-	opts, err := hub.DefaultOptions()
+	opts, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
