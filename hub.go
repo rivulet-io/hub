@@ -75,6 +75,15 @@ type Options struct {
 	ClusterConnPoolSize int
 	ClusterPingInterval time.Duration
 
+	GatewayHost     string
+	GatewayPort     int
+	GatewayUsername string
+	GatewayPassword string
+	GatewayRoutes   []struct {
+		Name string
+		URL  *url.URL
+	}
+
 	JetstreamMaxMemory    Size
 	JetstreamMaxStorage   Size
 	StreamMaxBufferedMsgs int
@@ -83,11 +92,14 @@ type Options struct {
 	SyncInterval          time.Duration
 	SyncAlways            bool
 
-	LogFile      string `json:"-"`
-	LogSizeLimit int64  `json:"-"`
-	LogMaxFiles  int64  `json:"-"`
-	Syslog       bool   `json:"-"`
-	RemoteSyslog string `json:"-"`
+	LogFile      string
+	LogSizeLimit int64
+	LogMaxFiles  int64
+	Syslog       bool
+	RemoteSyslog string
+
+	ClientAuthenticationMethod AuthMethod
+	RouterAuthenticationMethod AuthMethod
 }
 
 func DefaultOptions() (*Options, error) {
@@ -120,10 +132,11 @@ func DefaultOptions() (*Options, error) {
 		Port:       4222,
 		MaxPayload: NewSizeFromMegabytes(8),
 
-		ClusterHost:           "0.0.0.0",
-		ClusterPort:           6222,
-		ClusterConnPoolSize:   64,
-		ClusterPingInterval:   2 * time.Minute,
+		ClusterHost:         "0.0.0.0",
+		ClusterPort:         6222,
+		ClusterConnPoolSize: 64,
+		ClusterPingInterval: 2 * time.Minute,
+
 		JetstreamMaxMemory:    NewSizeFromMegabytes(512),
 		JetstreamMaxStorage:   NewSizeFromGigabytes(10),
 		StreamMaxBufferedMsgs: 65536,
@@ -136,6 +149,9 @@ func DefaultOptions() (*Options, error) {
 		LogMaxFiles:  3,
 		Syslog:       false,
 		RemoteSyslog: "",
+
+		ClientAuthenticationMethod: nil,
+		RouterAuthenticationMethod: nil,
 	}, nil
 }
 
@@ -185,6 +201,27 @@ func NewHub(opt *Options) (*Hub, error) {
 		StreamMaxBufferedSize: opt.StreamMaxBufferedSize,
 		SyncInterval:          opt.SyncInterval,
 		SyncAlways:            opt.SyncAlways,
+
+		CustomClientAuthentication: NewCustomAuthenticator(opt.ClientAuthenticationMethod),
+		CustomRouterAuthentication: NewCustomAuthenticator(opt.RouterAuthenticationMethod),
+
+		Gateway: server.GatewayOpts{
+			Name:     opt.Name,
+			Host:     opt.GatewayHost,
+			Port:     opt.GatewayPort,
+			Username: opt.GatewayUsername,
+			Password: opt.GatewayPassword,
+			Gateways: func() []*server.RemoteGatewayOpts {
+				var remotes []*server.RemoteGatewayOpts
+				for _, gr := range opt.GatewayRoutes {
+					remotes = append(remotes, &server.RemoteGatewayOpts{
+						Name: gr.Name,
+						URLs: []*url.URL{gr.URL},
+					})
+				}
+				return remotes
+			}(),
+		},
 	}
 
 	svr, err := server.NewServer(natsServerOpts)
