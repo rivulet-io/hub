@@ -318,8 +318,8 @@ func NewHub(opt *Options) (*Hub, error) {
 
 	go svr.Start()
 
-	// Increase timeout for server startup
-	if !svr.ReadyForConnections(4 * time.Second) {
+	// Increase timeout for server startup (especially for cluster environments)
+	if !svr.ReadyForConnections(15 * time.Second) {
 		return nil, fmt.Errorf("NATS server failed to start in time")
 	}
 
