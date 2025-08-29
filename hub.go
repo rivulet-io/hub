@@ -84,6 +84,12 @@ type Options struct {
 		URL  *url.URL
 	}
 
+	LeafNodeHost     string
+	LeafNodePort     int
+	LeafNodeUsername string
+	LeafNodePassword string
+	LeafNodeRoutes   []*url.URL
+
 	JetstreamMaxMemory    Size
 	JetstreamMaxStorage   Size
 	StreamMaxBufferedMsgs int
@@ -102,7 +108,7 @@ type Options struct {
 	RouterAuthenticationMethod AuthMethod
 }
 
-func DefaultOptions() (*Options, error) {
+func DefaultNodeOptions() (*Options, error) {
 	// Try to read existing hub ID from file
 	dataDir := "./data"
 	existingID, err := readHubID(dataDir)
@@ -137,6 +143,9 @@ func DefaultOptions() (*Options, error) {
 		ClusterConnPoolSize: 64,
 		ClusterPingInterval: 2 * time.Minute,
 
+		LeafNodeHost: "0.0.0.0",
+		LeafNodePort: 7422,
+
 		JetstreamMaxMemory:    NewSizeFromMegabytes(512),
 		JetstreamMaxStorage:   NewSizeFromGigabytes(10),
 		StreamMaxBufferedMsgs: 65536,
@@ -152,6 +161,69 @@ func DefaultOptions() (*Options, error) {
 
 		ClientAuthenticationMethod: nil,
 		RouterAuthenticationMethod: nil,
+	}, nil
+}
+
+func DefaultGatewayOptions() (*Options, error) {
+	opt, err := DefaultNodeOptions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default node options: %w", err)
+	}
+
+	opt.GatewayHost = "0.0.0.0"
+	opt.GatewayPort = 7222
+	opt.GatewayRoutes = []struct {
+		Name string
+		URL  *url.URL
+	}{
+		{
+			Name: "hub-gateway",
+			URL:  &url.URL{Scheme: "nats", Host: "localhost:7222"},
+		},
+	}
+
+	return opt, nil
+}
+
+func DefaultLeafOptions() (*Options, error) {
+	// Try to read existing hub ID from file
+	dataDir := "./data"
+	existingID, err := readHubID(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read hub ID: %w", err)
+	}
+
+	var hubID string
+	if existingID != "" {
+		// Use existing ID from file
+		hubID = existingID
+	} else {
+		// Generate new ID and save to file
+		hubID, err = generateHubID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate hub ID: %w", err)
+		}
+
+		if err := writeHubID(dataDir, hubID); err != nil {
+			return nil, fmt.Errorf("failed to save hub ID: %w", err)
+		}
+	}
+
+	return &Options{
+		Name:       hubID,
+		Host:       "0.0.0.0",
+		Port:       4222,
+		MaxPayload: NewSizeFromMegabytes(8),
+
+		JetstreamMaxMemory:  NewSizeFromMegabytes(32),
+		JetstreamMaxStorage: NewSizeFromMegabytes(128),
+		StoreDir:            dataDir,
+		SyncInterval:        2 * time.Second,
+		SyncAlways:          false,
+
+		LeafNodeHost:   "0.0.0.0",
+		LeafNodePort:   7466,
+		LeafNodeRoutes: []*url.URL{{Scheme: "nats", Host: "localhost:7422"}},
 	}, nil
 }
 
@@ -217,6 +289,22 @@ func NewHub(opt *Options) (*Hub, error) {
 					remotes = append(remotes, &server.RemoteGatewayOpts{
 						Name: gr.Name,
 						URLs: []*url.URL{gr.URL},
+					})
+				}
+				return remotes
+			}(),
+		},
+
+		LeafNode: server.LeafNodeOpts{
+			Host:     opt.LeafNodeHost,
+			Port:     opt.LeafNodePort,
+			Username: opt.LeafNodeUsername,
+			Password: opt.LeafNodePassword,
+			Remotes: func() []*server.RemoteLeafOpts {
+				var remotes []*server.RemoteLeafOpts
+				for _, lr := range opt.LeafNodeRoutes {
+					remotes = append(remotes, &server.RemoteLeafOpts{
+						URLs: []*url.URL{lr},
 					})
 				}
 				return remotes
