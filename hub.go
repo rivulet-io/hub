@@ -172,15 +172,6 @@ func DefaultGatewayOptions() (*Options, error) {
 
 	opt.GatewayHost = "0.0.0.0"
 	opt.GatewayPort = 7222
-	opt.GatewayRoutes = []struct {
-		Name string
-		URL  *url.URL
-	}{
-		{
-			Name: "hub-gateway",
-			URL:  &url.URL{Scheme: "nats", Host: "localhost:7222"},
-		},
-	}
 
 	return opt, nil
 }
@@ -215,14 +206,10 @@ func DefaultLeafOptions() (*Options, error) {
 		Port:       4222,
 		MaxPayload: NewSizeFromMegabytes(8),
 
-		JetstreamMaxMemory:  NewSizeFromMegabytes(32),
-		JetstreamMaxStorage: NewSizeFromMegabytes(128),
-		StoreDir:            dataDir,
-		SyncInterval:        2 * time.Second,
-		SyncAlways:          false,
+		StoreDir:     dataDir,
+		SyncInterval: 2 * time.Second,
+		SyncAlways:   false,
 
-		LeafNodeHost:   "0.0.0.0",
-		LeafNodePort:   7466,
 		LeafNodeRoutes: []*url.URL{{Scheme: "nats", Host: "localhost:7422"}},
 	}, nil
 }
