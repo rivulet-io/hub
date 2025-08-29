@@ -2,7 +2,7 @@ package hub
 
 import "github.com/nats-io/nats-server/v2/server"
 
-type AuthMethod func(string) bool
+type AuthMethod func(username string, password string, token string) bool
 
 var _ server.Authentication = &CustomAuthenticator{}
 
@@ -20,7 +20,7 @@ func (ca *CustomAuthenticator) Check(c server.ClientAuthentication) bool {
 		return false
 	}
 
-	return ca.authMethod(opt.Token)
+	return ca.authMethod(opt.Username, opt.Password, opt.Token)
 }
 
 func NewCustomAuthenticator(authMethod AuthMethod) *CustomAuthenticator {
