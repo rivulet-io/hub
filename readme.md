@@ -20,6 +20,7 @@ go get github.com/snowmerak/hub
 
 ## Quick Start
 
+### Basic Node (Single Server)
 ```go
 package main
 
@@ -31,8 +32,8 @@ import (
 )
 
 func main() {
-    // Create default options
-    opts, err := hub.DefaultOptions()
+    // Create basic node options (recommended)
+    opts, err := hub.DefaultNodeOptions()
     if err != nil {
         panic(err)
     }
@@ -56,8 +57,93 @@ func main() {
     }
     defer cancel()
 
-    // Publish a message
+    // Publish message
     err = h.PublishVolatile("greetings", []byte("Hello, Hub!"))
+    if err != nil {
+        panic(err)
+    }
+
+    time.Sleep(time.Second)
+}
+```
+
+### Edge Node (Central Hub Connection)
+```go
+package main
+
+import (
+    "fmt"
+    "net/url"
+    "time"
+
+    "github.com/snowmerak/hub"
+)
+
+func main() {
+    // Create edge node options
+    opts, err := hub.DefaultEdgeOptions()
+    if err != nil {
+        panic(err)
+    }
+
+    // Configure connection to central hub
+    hubURL, _ := url.Parse("nats://central-hub:7422")
+    opts.LeafNodeRoutes = []*url.URL{hubURL}
+
+    // Create edge node
+    h, err := hub.NewHub(opts)
+    if err != nil {
+        panic(err)
+    }
+    defer h.Shutdown()
+
+    // Send message to central hub
+    err = h.PublishVolatile("sensor.data", []byte("Temperature: 25°C"))
+    if err != nil {
+        panic(err)
+    }
+
+    time.Sleep(time.Second)
+}
+```
+
+### Gateway Node (Network Connection)
+```go
+package main
+
+import (
+    "fmt"
+    "net/url"
+    "time"
+
+    "github.com/snowmerak/hub"
+)
+
+func main() {
+    // Create gateway node options
+    opts, err := hub.DefaultGatewayOptions()
+    if err != nil {
+        panic(err)
+    }
+
+    // Configure connection to other network gateways
+    remoteGateway, _ := url.Parse("nats://remote-gateway:7222")
+    opts.GatewayRoutes = []struct {
+        Name string
+        URL  *url.URL
+    }{
+        {Name: "remote-network", URL: remoteGateway},
+    }
+
+    // Create gateway node
+    h, err := hub.NewHub(opts)
+    if err != nil {
+        panic(err)
+    }
+    defer h.Shutdown()
+
+    // Send cross-network message
+    err = h.PublishVolatile("global.announcement", []byte("System maintenance scheduled"))
     if err != nil {
         panic(err)
     }
@@ -578,11 +664,108 @@ data, err := h.GetFromObjectStore("user-documents", "report-2024-01")
 
 ## Configuration
 
-The `Options` struct provides comprehensive configuration:
+Hub provides three main configuration options tailored for different deployment scenarios:
+
+### 1. DefaultNodeOptions() - Basic Node Configuration
+
+The most complete configuration with full functionality, optimized for single-node operations.
+
+```go
+// Create basic node (recommended)
+opts, err := hub.DefaultNodeOptions()
+if err != nil {
+    panic(err)
+}
+
+h, err := hub.NewHub(opts)
+```
+
+**Key Features:**
+- **Ports**: Client (4222), Cluster (6222), Leaf Node (7422)
+- **JetStream**: Enabled (512MB memory, 10GB storage)
+- **Clustering**: Supported (pool size 64, ping interval 2 minutes)
+- **Data Directory**: `./data` (auto-created)
+- **Logging**: File rotation (10MB, max 3 files)
+- **ID Management**: Auto-generated and file-based recovery
+
+**Use Cases:**
+- Single server applications
+- Development/test environments
+- Standalone services
+
+### 2. DefaultGatewayOptions() - Gateway Node Configuration
+
+Gateway node configuration for routing messages between networks.
+
+```go
+// Create gateway node
+opts, err := hub.DefaultGatewayOptions()
+if err != nil {
+    panic(err)
+}
+
+// Add gateway routes
+gatewayURL, _ := url.Parse("nats://remote-gateway:7222")
+opts.GatewayRoutes = []struct {
+    Name string
+    URL  *url.URL
+}{
+    {Name: "remote-net", URL: gatewayURL},
+}
+
+h, err := hub.NewHub(opts)
+```
+
+**Key Features:**
+- **Base Node Features** + Gateway functionality
+- **Gateway Port**: 7222
+- **Cross-Network Routing**: Supported
+- **Message Forwarding**: Automatic
+- **Network Isolation**: Bridge role
+
+**Use Cases:**
+- Multi-network connections
+- Inter-datacenter communication
+- Distributed system gateways
+
+### 3. DefaultEdgeOptions() - Edge Node Configuration
+
+Lightweight node configuration for edge computing, connects to central hub.
+
+```go
+// Create edge node
+opts, err := hub.DefaultEdgeOptions()
+if err != nil {
+    panic(err)
+}
+
+// Configure central hub connection
+hubURL, _ := url.Parse("nats://central-hub:7422")
+opts.LeafNodeRoutes = []*url.URL{hubURL}
+
+h, err := hub.NewHub(opts)
+```
+
+**Key Features:**
+- **JetStream**: Disabled (lightweight)
+- **Leaf Node Connection**: Auto-connects to central hub
+- **Message Delegation**: Persistent storage delegated to hub
+- **Resource Optimization**: Memory/storage optimized
+- **Fast Startup**: Minimal configuration for quick deployment
+
+**Use Cases:**
+- IoT devices
+- Edge computing nodes
+- Lightweight clients
+- Distributed sensor networks
+
+### Manual Configuration Options
+
+In addition to the three default options, detailed manual configuration is possible:
 
 ```go
 opts := &hub.Options{
-    Name:               "my-hub",
+    Name:               "my-custom-hub",
     Host:               "0.0.0.0",
     Port:               4222,
     AuthorizationToken: "your-token",
@@ -599,13 +782,90 @@ opts := &hub.Options{
     JetstreamMaxStorage: hub.NewSizeFromGigabytes(10),
     StoreDir:            "./data",
 
-    // Logging
+    // Logging options
     LogFile:      "./nats.log",
     LogSizeLimit: 10 * 1024 * 1024,
+    LogMaxFiles:  3,
 }
 ```
 
+## Deployment Architecture Patterns
+
+### 1. Single Node Architecture
+```go
+// Simplest configuration
+opts, err := hub.DefaultNodeOptions()
+h, err := hub.NewHub(opts)
+```
+**Pros**: Simple setup, fast startup
+**Cons**: Single point of failure, limited scalability
+
+### 2. Cluster Architecture
+```go
+// Node 1
+opts1, err := hub.DefaultNodeOptions()
+opts1.Routes = []*url.URL{} // Other node URLs
+
+// Node 2
+opts2, err := hub.DefaultNodeOptions()
+opts2.Routes = []*url.URL{{Host: "node1:6222"}}
+```
+**Pros**: High availability, load balancing
+**Cons**: Complex configuration, network overhead
+
+### 3. Gateway Architecture
+```go
+// Gateway node
+gatewayOpts, err := hub.DefaultGatewayOptions()
+
+// Network A
+netAOpts, err := hub.DefaultNodeOptions()
+
+// Network B
+netBOpts, err := hub.DefaultNodeOptions()
+```
+**Pros**: Network isolation, enhanced security
+**Cons**: Additional hop causing latency
+
+### 4. Edge Architecture
+```go
+// Central hub
+hubOpts, err := hub.DefaultNodeOptions()
+
+// Edge nodes
+for i := 0; i < 10; i++ {
+    edgeOpts, err := hub.DefaultEdgeOptions()
+    edgeOpts.LeafNodeRoutes = []*url.URL{{Host: "central-hub:7422"}}
+}
+```
+**Pros**: Efficient resource usage, easy scaling
+**Cons**: Hub dependency, centralization
+
+## Configuration Options Comparison
+
+| Feature | DefaultNodeOptions | DefaultGatewayOptions | DefaultEdgeOptions |
+|---------|-------------------|----------------------|-------------------|
+| **JetStream** | ✅ | ✅ | ❌ |
+| **Clustering** | ✅ | ✅ | ❌ |
+| **Gateway** | ❌ | ✅ | ❌ |
+| **Leaf Node** | ✅ | ✅ | ✅ (Client) |
+| **Memory Usage** | High | High | Low |
+| **Storage Usage** | High | High | Low |
+| **Startup Speed** | Medium | Medium | Fast |
+| **Scalability** | High | High | Limited |
+
+## Recommended Use Cases
+
+- **DefaultNodeOptions()**: General applications, development environments
+- **DefaultGatewayOptions()**: Enterprise networks, multi-datacenter
+- **DefaultEdgeOptions()**: IoT, edge computing, microservices
+
 ## API Reference
+
+### Option Creation Functions
+- `DefaultNodeOptions() (*Options, error)` - Create basic node options (single server)
+- `DefaultGatewayOptions() (*Options, error)` - Create gateway node options (network connection)
+- `DefaultEdgeOptions() (*Options, error)` - Create edge node options (lightweight client)
 
 ### Core Methods
 - `NewHub(opts *Options) (*Hub, error)` - Create and start a new hub
@@ -688,21 +948,75 @@ In JetStream, ACK indicates message processing completion:
 
 ```go
 // Node 1
-opts1 := &hub.Options{
-    Name:        "node1",
-    ClusterHost: "0.0.0.0",
-    ClusterPort: 6222,
-    Routes:      []*url.URL{}, // URLs of other nodes
+opts1, err := hub.DefaultNodeOptions()
+if err != nil {
+    panic(err)
 }
+opts1.Name = "cluster-node-1"
+opts1.Routes = []*url.URL{} // Other node URLs
+
+h1, err := hub.NewHub(opts1)
 
 // Node 2
-opts2 := &hub.Options{
-    Name:        "node2", 
-    ClusterHost: "0.0.0.0",
-    ClusterPort: 6223,
-    Routes: []*url.URL{
-        {Host: "127.0.0.1:6222"}, // Connect to node 1
-    },
+opts2, err := hub.DefaultNodeOptions()
+if err != nil {
+    panic(err)
+}
+opts2.Name = "cluster-node-2"
+opts2.Routes = []*url.URL{
+    {Host: "127.0.0.1:6222"}, // Connect to node 1
+}
+
+h2, err := hub.NewHub(opts2)
+```
+
+### Gateway Network Configuration
+
+```go
+// Gateway for Network A
+gwOpts, err := hub.DefaultGatewayOptions()
+if err != nil {
+    panic(err)
+}
+gwOpts.Name = "gateway-net-a"
+
+gatewayHub, err := hub.NewHub(gwOpts)
+
+// Node in Network B
+netBOpts, err := hub.DefaultNodeOptions()
+if err != nil {
+    panic(err)
+}
+netBOpts.Name = "node-net-b"
+
+netBHub, err := hub.NewHub(netBOpts)
+```
+
+### Edge Computing Configuration
+
+```go
+// Central hub
+hubOpts, err := hub.DefaultNodeOptions()
+if err != nil {
+    panic(err)
+}
+hubOpts.Name = "central-hub"
+
+centralHub, err := hub.NewHub(hubOpts)
+
+// Edge nodes
+for i := 0; i < 5; i++ {
+    edgeOpts, err := hub.DefaultEdgeOptions()
+    if err != nil {
+        panic(err)
+    }
+    edgeOpts.Name = fmt.Sprintf("edge-node-%d", i+1)
+    edgeOpts.LeafNodeRoutes = []*url.URL{
+        {Host: "central-hub:7422"},
+    }
+    
+    edgeHub, err := hub.NewHub(edgeOpts)
+    // Use edge node...
 }
 ```
 
