@@ -176,7 +176,7 @@ func DefaultGatewayOptions() (*Options, error) {
 	return opt, nil
 }
 
-func DefaultLeafOptions() (*Options, error) {
+func DefaultEdgeOptions() (*Options, error) {
 	// Try to read existing hub ID from file
 	dataDir := "./data"
 	existingID, err := readHubID(dataDir)
