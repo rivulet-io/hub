@@ -264,39 +264,49 @@ func NewHub(opt *Options) (*Hub, error) {
 		CustomClientAuthentication: NewCustomAuthenticator(opt.ClientAuthenticationMethod),
 		CustomRouterAuthentication: NewCustomAuthenticator(opt.RouterAuthenticationMethod),
 
-		Gateway: server.GatewayOpts{
-			Name:     opt.Name,
-			Host:     opt.GatewayHost,
-			Port:     opt.GatewayPort,
-			Username: opt.GatewayUsername,
-			Password: opt.GatewayPassword,
-			Gateways: func() []*server.RemoteGatewayOpts {
-				var remotes []*server.RemoteGatewayOpts
-				for _, gr := range opt.GatewayRoutes {
-					remotes = append(remotes, &server.RemoteGatewayOpts{
-						Name: gr.Name,
-						URLs: []*url.URL{gr.URL},
-					})
-				}
-				return remotes
-			}(),
-		},
+		Gateway: func() server.GatewayOpts {
+			if opt.GatewayHost == "" || opt.GatewayPort == 0 {
+				return server.GatewayOpts{}
+			}
+			return server.GatewayOpts{
+				Name:     opt.Name,
+				Host:     opt.GatewayHost,
+				Port:     opt.GatewayPort,
+				Username: opt.GatewayUsername,
+				Password: opt.GatewayPassword,
+				Gateways: func() []*server.RemoteGatewayOpts {
+					var remotes []*server.RemoteGatewayOpts
+					for _, gr := range opt.GatewayRoutes {
+						remotes = append(remotes, &server.RemoteGatewayOpts{
+							Name: gr.Name,
+							URLs: []*url.URL{gr.URL},
+						})
+					}
+					return remotes
+				}(),
+			}
+		}(),
 
-		LeafNode: server.LeafNodeOpts{
-			Host:     opt.LeafNodeHost,
-			Port:     opt.LeafNodePort,
-			Username: opt.LeafNodeUsername,
-			Password: opt.LeafNodePassword,
-			Remotes: func() []*server.RemoteLeafOpts {
-				var remotes []*server.RemoteLeafOpts
-				for _, lr := range opt.LeafNodeRoutes {
-					remotes = append(remotes, &server.RemoteLeafOpts{
-						URLs: []*url.URL{lr},
-					})
-				}
-				return remotes
-			}(),
-		},
+		LeafNode: func() server.LeafNodeOpts {
+			if len(opt.LeafNodeRoutes) == 0 {
+				return server.LeafNodeOpts{}
+			}
+			return server.LeafNodeOpts{
+				Host:     opt.LeafNodeHost,
+				Port:     opt.LeafNodePort,
+				Username: opt.LeafNodeUsername,
+				Password: opt.LeafNodePassword,
+				Remotes: func() []*server.RemoteLeafOpts {
+					var remotes []*server.RemoteLeafOpts
+					for _, lr := range opt.LeafNodeRoutes {
+						remotes = append(remotes, &server.RemoteLeafOpts{
+							URLs: []*url.URL{lr},
+						})
+					}
+					return remotes
+				}(),
+			}
+		}(),
 	}
 
 	svr, err := server.NewServer(natsServerOpts)
