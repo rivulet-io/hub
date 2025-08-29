@@ -20,7 +20,7 @@ func TestCreateOrUpdatePersistent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestSubscribePersistentViaDurable(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestSubscribePersistentViaEphemeral(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestPublishPersistent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestJetStreamClusterCommunication(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -477,7 +477,7 @@ func TestJetStreamAckHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -569,7 +569,7 @@ func TestJetStreamErrorHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -627,7 +627,7 @@ func TestJetStreamRetentionPolicies(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}

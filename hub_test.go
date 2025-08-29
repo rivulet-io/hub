@@ -8,7 +8,7 @@ import (
 )
 
 func TestDefaultOptions(t *testing.T) {
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("DefaultOptions() failed: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestNewHub(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create options with unique port to avoid conflicts
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestNewHubWithInvalidOptions(t *testing.T) {
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
 
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestHubShutdown(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestHubVolatileMessaging(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestHubRequestReply(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}

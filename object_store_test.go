@@ -18,7 +18,7 @@ func TestCreateObjectStore(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestObjectStoreCRUD(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestObjectStoreConcurrency(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestObjectStoreClusterOperations(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestObjectStoreMetadata(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -498,7 +498,7 @@ func TestObjectStoreErrorHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}

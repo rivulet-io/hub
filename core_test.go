@@ -17,7 +17,7 @@ func TestSubscribeVolatileViaFanout(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestSubscribeVolatileViaQueue(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestPublishVolatile(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRequestVolatile(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestCoreClusterCommunication(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestCoreMultipleSubscribers(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestCoreErrorHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create hub instance
-	opts, err := DefaultOptions()
+	opts, err := DefaultNodeOptions()
 	if err != nil {
 		t.Fatalf("Failed to create default options: %v", err)
 	}
