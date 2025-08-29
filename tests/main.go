@@ -1,8 +1,8 @@
 package main
 
 func main() {
-	// coreTestFunc()
-	// clusterTestFunc()
-	// edgeTestFunc()
+	coreTestFunc()
+	clusterTestFunc()
+	edgeTestFunc()
 	gatewayTestFunc()
 }
