@@ -138,6 +138,49 @@ func (h *Hub) SubscribePersistentViaDurable(subscriberID string, subject string,
 	}, nil
 }
 
+func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, batch int, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
+	sub, err := h.jetstreamCtx.PullSubscribe(subject, subscriberID, nats.ManualAck())
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to subject %q: %w", subject, err)
+	}
+
+	cancelFunc := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-cancelFunc:
+				return
+			default:
+				msgs, err := sub.Fetch(batch)
+				if err != nil && err != nats.ErrTimeout {
+					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
+					continue
+				}
+				for _, msg := range msgs {
+					response, ok, ack := handler(msg.Subject, msg.Data)
+					if ack {
+						if err := msg.Ack(); err != nil {
+							errHandler(fmt.Errorf("failed to acknowledge message on subject %q: %w", msg.Subject, err))
+						}
+					}
+					if !ok || msg.Reply == "" {
+						continue
+					}
+					if err := msg.Respond(response); err != nil {
+						errHandler(fmt.Errorf("failed to respond to message on subject %q: %w", msg.Subject, err))
+					}
+				}
+			}
+		}
+	}()
+	return func() {
+		close(cancelFunc)
+		if err := sub.Unsubscribe(); err != nil {
+			errHandler(fmt.Errorf("failed to unsubscribe from subject %q: %w", subject, err))
+		}
+	}, nil
+}
+
 func (h *Hub) SubscribePersistentViaEphemeral(subject string, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
 	sub, err := h.jetstreamCtx.Subscribe(subject, func(msg *nats.Msg) {
 		response, ok, ack := handler(msg.Subject, msg.Data)
@@ -158,6 +201,48 @@ func (h *Hub) SubscribePersistentViaEphemeral(subject string, handler func(subje
 	}
 
 	return func() {
+		if err := sub.Unsubscribe(); err != nil {
+			errHandler(fmt.Errorf("failed to unsubscribe from subject %q: %w", subject, err))
+		}
+	}, nil
+}
+
+func (h *Hub) PullPersistentViaEphemeral(subject string, batch int, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
+	sub, err := h.jetstreamCtx.PullSubscribe(subject, "", nats.ManualAck())
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to subject %q: %w", subject, err)
+	}
+	cancelFunc := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-cancelFunc:
+				return
+			default:
+				msgs, err := sub.Fetch(batch)
+				if err != nil && err != nats.ErrTimeout {
+					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
+					continue
+				}
+				for _, msg := range msgs {
+					response, ok, ack := handler(msg.Subject, msg.Data)
+					if ack {
+						if err := msg.Ack(); err != nil {
+							errHandler(fmt.Errorf("failed to acknowledge message on subject %q: %w", msg.Subject, err))
+						}
+					}
+					if !ok || msg.Reply == "" {
+						continue
+					}
+					if err := msg.Respond(response); err != nil {
+						errHandler(fmt.Errorf("failed to respond to message on subject %q: %w", msg.Subject, err))
+					}
+				}
+			}
+		}
+	}()
+	return func() {
+		close(cancelFunc)
 		if err := sub.Unsubscribe(); err != nil {
 			errHandler(fmt.Errorf("failed to unsubscribe from subject %q: %w", subject, err))
 		}
