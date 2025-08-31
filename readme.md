@@ -614,6 +614,199 @@ cancel, err := h.SubscribePersistentViaDurable("persistent-monitor", "system.eve
 - **Ephemeral**: Temporary monitoring, debugging, one-time tasks
 - **Durable**: Critical event processing, data pipelines, persistent subscriptions
 
+### 6. JetStream Pull Model (Batch Processing)
+
+Pull model allows consumers to actively fetch messages in batches, providing better control over processing rate and backpressure.
+
+#### Basic Pull Configuration
+
+```go
+// Pull options for fine-tuned control
+pullOpts := hub.PullOptions{
+    Batch:    20,                    // Fetch 20 messages at once
+    MaxWait:  5 * time.Second,       // Wait up to 5 seconds for messages
+    Interval: 100 * time.Millisecond, // Poll every 100ms
+}
+```
+
+#### Pull with Durable Consumer
+
+```go
+// Create stream first
+config := &hub.PersistentConfig{
+    Description: "Batch processing stream",
+    Subjects:    []string{"batch.>"},
+    Retention:   0, // Limits policy
+    MaxMsgs:     10000,
+}
+err := h.CreateOrUpdatePersistent(config)
+
+// Pull consumer with batch processing
+cancel, err := h.PullPersistentViaDurable(
+    "batch-processor",    // Durable consumer ID
+    "batch.tasks",        // Subject
+    pullOpts,            // Pull options
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        fmt.Printf("Batch processing: %s\n", string(msg))
+        
+        // Process message in batch context
+        processBatchItem(msg)
+        
+        return nil, false, true // ACK
+    },
+    func(err error) {
+        log.Printf("Pull error: %v", err)
+    },
+)
+defer cancel()
+```
+
+#### Pull with Ephemeral Consumer
+
+```go
+// Temporary pull consumer for one-time batch jobs
+cancel, err := h.PullPersistentViaEphemeral(
+    "batch.cleanup",     // Subject
+    pullOpts,           // Pull options
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        fmt.Printf("Cleanup task: %s\n", string(msg))
+        return nil, false, true
+    },
+    errorHandler,
+)
+defer cancel()
+```
+
+#### Advanced Pull Patterns
+
+##### High-Throughput Processing
+```go
+highThroughputOpts := hub.PullOptions{
+    Batch:    100,                   // Large batches
+    MaxWait:  1 * time.Second,       // Short timeout
+    Interval: 10 * time.Millisecond, // Fast polling
+}
+
+cancel, err := h.PullPersistentViaDurable(
+    "high-throughput-processor",
+    "analytics.events",
+    highThroughputOpts,
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        // Fast processing logic
+        processAnalyticsEvent(msg)
+        return nil, false, true
+    },
+    errorHandler,
+)
+```
+
+##### Low-Power Mode
+```go
+lowPowerOpts := hub.PullOptions{
+    Batch:    5,                    // Small batches
+    MaxWait:  10 * time.Second,     // Long timeout
+    Interval: 1 * time.Second,      // Slow polling
+}
+
+cancel, err := h.PullPersistentViaEphemeral(
+    "sensor.readings",
+    lowPowerOpts,
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        // Energy-efficient processing
+        processSensorData(msg)
+        return nil, false, true
+    },
+    errorHandler,
+)
+```
+
+##### Adaptive Batch Processing
+```go
+// Start with moderate settings
+adaptiveOpts := hub.PullOptions{
+    Batch:    20,
+    MaxWait:  5 * time.Second,
+    Interval: 100 * time.Millisecond,
+}
+
+cancel, err := h.PullPersistentViaDurable(
+    "adaptive-processor",
+    "orders.processing",
+    adaptiveOpts,
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        startTime := time.Now()
+        
+        // Process order
+        processOrder(msg)
+        
+        processingTime := time.Since(startTime)
+        
+        // Adapt batch size based on processing time
+        if processingTime > 100*time.Millisecond {
+            // Slow processing - reduce batch size
+            adaptiveOpts.Batch = max(5, adaptiveOpts.Batch-5)
+        } else if processingTime < 10*time.Millisecond {
+            // Fast processing - increase batch size
+            adaptiveOpts.Batch = min(100, adaptiveOpts.Batch+10)
+        }
+        
+        return nil, false, true
+    },
+    errorHandler,
+)
+```
+
+#### Pull vs Push Model Comparison
+
+| Feature | Push Model | Pull Model |
+|---------|------------|------------|
+| **Latency** | ✅ Low (immediate) | ❌ Higher (polling) |
+| **Throughput** | ❌ Limited | ✅ High (batching) |
+| **Backpressure** | ❌ Difficult | ✅ Full control |
+| **Batch Processing** | ❌ One by one | ✅ Natural batching |
+| **Resource Usage** | ❌ High (always active) | ✅ Configurable |
+| **Error Recovery** | ❌ Complex | ✅ Simple restart |
+
+#### Pull Model Best Practices
+
+1. **Choose Appropriate Batch Size**
+```go
+// For high-volume: larger batches
+opts := hub.PullOptions{Batch: 100}
+
+// For low-latency: smaller batches
+opts := hub.PullOptions{Batch: 5}
+```
+
+2. **Set Reasonable MaxWait**
+```go
+// Balance between responsiveness and efficiency
+opts := hub.PullOptions{
+    MaxWait: 5 * time.Second, // Don't wait too long
+}
+```
+
+3. **Use Appropriate Polling Interval**
+```go
+// High-frequency: short interval
+opts := hub.PullOptions{Interval: 10 * time.Millisecond}
+
+// Low-frequency: longer interval
+opts := hub.PullOptions{Interval: 1 * time.Second}
+```
+
+4. **Handle Empty Fetches Gracefully**
+```go
+// The pull implementation automatically handles timeouts
+// and continues polling - no special handling needed
+```
+
+**Use Cases**:
+- **High-throughput processing**: Analytics, data pipelines, ETL
+- **Batch operations**: File processing, data migration, reporting
+- **Resource-constrained environments**: IoT devices, edge computing
+- **Backpressure-sensitive systems**: Rate-limited APIs, database writes
+
 ### 7. Key-Value Store (Configuration and Cache)
 
 ```go
@@ -1054,6 +1247,8 @@ for i := 0; i < 10; i++ {
 - `CreateOrUpdatePersistent(config)` - Create/update persistent stream
 - `SubscribePersistentViaDurable(id, subject, handler, errHandler)` - Durable consumer subscription (persists after restart)
 - `SubscribePersistentViaEphemeral(subject, handler, errHandler)` - Ephemeral consumer subscription (temporary)
+- `PullPersistentViaDurable(id, subject, options, handler, errHandler)` - Durable pull consumer (batch processing)
+- `PullPersistentViaEphemeral(subject, options, handler, errHandler)` - Ephemeral pull consumer (batch processing)
 - `PublishPersistent(subject, msg)` - Publish message to persistent stream
 
 ### Key-Value Store (Key-Value Store)
@@ -1092,6 +1287,17 @@ func(subject string, msg []byte) (response []byte, reply bool, ack bool)
 func(error)
 ```
 
+### Configuration Structures
+
+#### PullOptions (for Pull Model)
+```go
+type PullOptions struct {
+    Batch    int           // Number of messages to fetch per batch (default: 5)
+    MaxWait  time.Duration // Maximum time to wait for messages (default: 5s)
+    Interval time.Duration // Polling interval between fetches (default: 100ms)
+}
+```
+
 ### ACK (Acknowledgment) Behavior
 
 In JetStream, ACK indicates message processing completion:
@@ -1109,6 +1315,7 @@ In JetStream, ACK indicates message processing completion:
 | **Request/Reply** | ❌ | ✅ | ❌ | RPC, service calls |
 | **JetStream Publish/Subscribe** | ✅ | ✅ | ❌ | Event sourcing, audit logs |
 | **JetStream QueueSub** | ✅ | ✅ | ✅ | Batch processing, reliability-critical tasks |
+| **JetStream Pull Model** | ✅ | ✅ | ✅ | High-throughput batch processing, backpressure control |
 | **Key-Value Store** | ✅ | ✅ | ❌ | Configuration, cache, metadata |
 | **Distributed Locking** | ✅ | ✅ | ❌ | Critical sections, coordination, leader election |
 | **Object Store** | ✅ | ✅ | ❌ | File storage, large data |
@@ -1120,6 +1327,8 @@ In JetStream, ACK indicates message processing completion:
 - **Task distribution required**: QueueSub pattern
 - **Response required**: Request/Reply
 - **Coordination required**: Distributed Locking
+- **Batch processing required**: JetStream Pull Model
+- **Backpressure control required**: JetStream Pull Model
 - **Large data**: Object Store
 - **Frequent read/write**: Key-Value Store
 
