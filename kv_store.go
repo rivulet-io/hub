@@ -135,10 +135,26 @@ func (h *Hub) TryLock(bucket, key string) (cancel func(), err error) {
 	}, nil
 }
 
-func (h *Hub) Lock(ctx context.Context, bucket, key string) (cancel func(), err error) {
-	currentDelay := time.Millisecond * 10
-	const backOffFactor = 2
-	const maxDelay = 2 * time.Second
+type LockOptions struct {
+	initialDelay  time.Duration
+	MaxDelay      time.Duration
+	BackOffFactor int
+}
+
+func (h *Hub) Lock(ctx context.Context, bucket, key string, opt ...LockOptions) (cancel func(), err error) {
+	option := LockOptions{
+		initialDelay:  time.Millisecond * 10,
+		MaxDelay:      2 * time.Second,
+		BackOffFactor: 2,
+	}
+	if len(opt) > 0 {
+		option = opt[0]
+	}
+
+	currentDelay := option.initialDelay
+	backOffFactor := time.Duration(option.BackOffFactor)
+	maxDelay := option.MaxDelay
+
 	for {
 		select {
 		case <-ctx.Done():
