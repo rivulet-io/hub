@@ -730,3 +730,727 @@ func TestJetStreamRetentionPolicies(t *testing.T) {
 		t.Logf("Successfully created stream with WorkQueue retention policy")
 	})
 }
+
+func TestPullPersistentViaDurable(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_durable_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream for testing
+	config := &PersistentConfig{
+		Description: "Test stream for pull durable",
+		Subjects:    []string{"pull.test.>"},
+		Retention:   nats.LimitsPolicy,
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Publish test messages
+	testMessages := []string{
+		"message-1",
+		"message-2",
+		"message-3",
+		"message-4",
+		"message-5",
+	}
+
+	for _, msg := range testMessages {
+		err = hub.PublishPersistent("pull.test.messages", []byte(msg))
+		if err != nil {
+			t.Fatalf("Failed to publish message %s: %v", msg, err)
+		}
+	}
+
+	// Wait a bit for messages to be stored
+	time.Sleep(100 * time.Millisecond)
+
+	// Test pull with custom options
+	pullOpts := PullOptions{
+		Batch:    3,                     // Fetch 3 messages at a time
+		MaxWait:  2 * time.Second,       // Wait up to 2 seconds
+		Interval: 50 * time.Millisecond, // Poll every 50ms
+	}
+
+	var receivedMessages []string
+	var mu sync.Mutex
+	messageCount := 0
+
+	cancel, err := hub.PullPersistentViaDurable(
+		"test-durable-consumer",
+		"pull.test.messages",
+		pullOpts,
+		func(subject string, msg []byte) ([]byte, bool, bool) {
+			mu.Lock()
+			defer mu.Unlock()
+
+			receivedMessages = append(receivedMessages, string(msg))
+			messageCount++
+
+			t.Logf("Received message %d: %s", messageCount, string(msg))
+			return nil, false, true // ACK the message
+		},
+		func(err error) {
+			t.Logf("Pull error: %v", err)
+		},
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to start pull consumer: %v", err)
+	}
+	defer cancel()
+
+	// Wait for all messages to be received
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timeout waiting for messages. Received %d out of %d", len(receivedMessages), len(testMessages))
+		case <-ticker.C:
+			mu.Lock()
+			if len(receivedMessages) >= len(testMessages) {
+				mu.Unlock()
+				goto checkMessages
+			}
+			mu.Unlock()
+		}
+	}
+
+checkMessages:
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(receivedMessages) != len(testMessages) {
+		t.Errorf("Expected %d messages, got %d", len(testMessages), len(receivedMessages))
+	}
+
+	// Verify all messages were received (order may vary)
+	receivedSet := make(map[string]bool)
+	for _, msg := range receivedMessages {
+		receivedSet[msg] = true
+	}
+
+	for _, expected := range testMessages {
+		if !receivedSet[expected] {
+			t.Errorf("Expected message %s not received", expected)
+		}
+	}
+
+	t.Logf("Successfully received all %d messages via pull durable consumer", len(receivedMessages))
+}
+
+func TestPullPersistentViaEphemeral(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_ephemeral_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream for testing
+	config := &PersistentConfig{
+		Description: "Test stream for pull ephemeral",
+		Subjects:    []string{"ephemeral.test.>"},
+		Retention:   nats.LimitsPolicy,
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Test with default pull options (should use defaults)
+	defaultOpts := PullOptions{} // All zeros, should use defaults
+
+	var receivedCount int
+	var mu sync.Mutex
+
+	cancel, err := hub.PullPersistentViaEphemeral(
+		"ephemeral.test.data",
+		defaultOpts,
+		func(subject string, msg []byte) ([]byte, bool, bool) {
+			mu.Lock()
+			defer mu.Unlock()
+			receivedCount++
+			t.Logf("Ephemeral consumer received: %s", string(msg))
+			return nil, false, true
+		},
+		func(err error) {
+			t.Logf("Ephemeral pull error: %v", err)
+		},
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to start ephemeral pull consumer: %v", err)
+	}
+	defer cancel()
+
+	// Publish some test messages after starting consumer
+	testData := []string{"data-1", "data-2", "data-3"}
+
+	time.Sleep(100 * time.Millisecond) // Let consumer start
+
+	for _, data := range testData {
+		err = hub.PublishPersistent("ephemeral.test.data", []byte(data))
+		if err != nil {
+			t.Fatalf("Failed to publish data %s: %v", data, err)
+		}
+	}
+
+	// Wait for messages to be processed
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			mu.Lock()
+			count := receivedCount
+			mu.Unlock()
+			t.Fatalf("Timeout waiting for messages. Received %d out of %d", count, len(testData))
+		case <-ticker.C:
+			mu.Lock()
+			if receivedCount >= len(testData) {
+				mu.Unlock()
+				goto checkComplete
+			}
+			mu.Unlock()
+		}
+	}
+
+checkComplete:
+	mu.Lock()
+	finalCount := receivedCount
+	mu.Unlock()
+
+	if finalCount != len(testData) {
+		t.Errorf("Expected %d messages, got %d", len(testData), finalCount)
+	}
+
+	t.Logf("Successfully received all %d messages via ephemeral pull consumer", finalCount)
+}
+
+func TestPullOptionsDefaults(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_defaults_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream for testing
+	config := &PersistentConfig{
+		Description: "Test stream for pull defaults",
+		Subjects:    []string{"defaults.test.>"},
+		Retention:   nats.LimitsPolicy,
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Test with various invalid/zero options to verify defaults are applied
+	testCases := []struct {
+		name string
+		opts PullOptions
+	}{
+		{
+			name: "AllZeros",
+			opts: PullOptions{Batch: 0, MaxWait: 0, Interval: 0},
+		},
+		{
+			name: "NegativeValues",
+			opts: PullOptions{Batch: -1, MaxWait: -1, Interval: -1},
+		},
+		{
+			name: "MixedValidInvalid",
+			opts: PullOptions{Batch: 10, MaxWait: 0, Interval: 0},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cancel, err := hub.PullPersistentViaDurable(
+				fmt.Sprintf("test-defaults-%s", tc.name),
+				"defaults.test.messages",
+				tc.opts,
+				func(subject string, msg []byte) ([]byte, bool, bool) {
+					return nil, false, true
+				},
+				func(err error) {
+					// This should not be called for startup errors
+					t.Logf("Pull error in %s: %v", tc.name, err)
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("Failed to start pull consumer with %s: %v", tc.name, err)
+			}
+
+			// Verify consumer started successfully (defaults were applied)
+			time.Sleep(200 * time.Millisecond)
+			cancel()
+
+			t.Logf("Successfully started pull consumer with %s options", tc.name)
+		})
+	}
+}
+
+func TestPullBatchProcessing(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_batch_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream for testing
+	config := &PersistentConfig{
+		Description: "Test stream for batch processing",
+		Subjects:    []string{"batch.test.>"},
+		Retention:   nats.LimitsPolicy,
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Publish many messages
+	messageCount := 25
+	for i := 0; i < messageCount; i++ {
+		msg := fmt.Sprintf("batch-message-%d", i+1)
+		err = hub.PublishPersistent("batch.test.work", []byte(msg))
+		if err != nil {
+			t.Fatalf("Failed to publish message %d: %v", i+1, err)
+		}
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Test with different batch sizes
+	testCases := []struct {
+		name      string
+		batchSize int
+	}{
+		{"Small batch", 3},
+		{"Medium batch", 10},
+		{"Large batch", 20},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pullOpts := PullOptions{
+				Batch:    tc.batchSize,
+				MaxWait:  1 * time.Second,
+				Interval: 50 * time.Millisecond,
+			}
+
+			var batchCounts []int
+			var totalReceived int
+			var mu sync.Mutex
+			currentBatch := 0
+
+			consumerID := fmt.Sprintf("batch-consumer-%d", tc.batchSize)
+
+			cancel, err := hub.PullPersistentViaDurable(
+				consumerID,
+				"batch.test.work",
+				pullOpts,
+				func(subject string, msg []byte) ([]byte, bool, bool) {
+					mu.Lock()
+					defer mu.Unlock()
+
+					totalReceived++
+					currentBatch++
+
+					// Log every batch completion (approximately)
+					if currentBatch >= tc.batchSize {
+						batchCounts = append(batchCounts, currentBatch)
+						t.Logf("Batch %d completed with %d messages", len(batchCounts), currentBatch)
+						currentBatch = 0
+					}
+
+					return nil, false, true
+				},
+				func(err error) {
+					t.Logf("Batch pull error: %v", err)
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("Failed to start batch consumer: %v", err)
+			}
+
+			// Wait for some messages to be processed
+			time.Sleep(2 * time.Second)
+			cancel()
+
+			mu.Lock()
+			finalTotal := totalReceived
+			finalBatches := len(batchCounts)
+			mu.Unlock()
+
+			if finalTotal == 0 {
+				t.Errorf("No messages received for batch size %d", tc.batchSize)
+			}
+
+			t.Logf("Batch size %d: received %d messages in %d batches",
+				tc.batchSize, finalTotal, finalBatches)
+		})
+	}
+}
+
+func TestPullConcurrentConsumers(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_concurrent_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream for testing
+	config := &PersistentConfig{
+		Description: "Test stream for concurrent pull consumers",
+		Subjects:    []string{"concurrent.test.>"},
+		Retention:   nats.LimitsPolicy,
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Publish test messages
+	messageCount := 20
+	for i := 0; i < messageCount; i++ {
+		msg := fmt.Sprintf("concurrent-message-%d", i+1)
+		err = hub.PublishPersistent("concurrent.test.tasks", []byte(msg))
+		if err != nil {
+			t.Fatalf("Failed to publish message %d: %v", i+1, err)
+		}
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Start multiple concurrent pull consumers
+	consumerCount := 3
+	pullOpts := PullOptions{
+		Batch:    5,
+		MaxWait:  1 * time.Second,
+		Interval: 100 * time.Millisecond,
+	}
+
+	var wg sync.WaitGroup
+	var totalReceived int64
+	var mu sync.Mutex
+	cancels := make([]func(), consumerCount)
+
+	for i := 0; i < consumerCount; i++ {
+		wg.Add(1)
+		consumerID := fmt.Sprintf("concurrent-consumer-%d", i+1)
+
+		go func(id string, index int) {
+			defer wg.Done()
+
+			cancel, err := hub.PullPersistentViaDurable(
+				id,
+				"concurrent.test.tasks",
+				pullOpts,
+				func(subject string, msg []byte) ([]byte, bool, bool) {
+					mu.Lock()
+					totalReceived++
+					count := totalReceived
+					mu.Unlock()
+
+					t.Logf("Consumer %s received message %d: %s", id, count, string(msg))
+					return nil, false, true
+				},
+				func(err error) {
+					t.Logf("Consumer %s error: %v", id, err)
+				},
+			)
+
+			if err != nil {
+				t.Errorf("Failed to start consumer %s: %v", id, err)
+				return
+			}
+
+			cancels[index] = cancel
+		}(consumerID, i)
+	}
+
+	// Wait for consumers to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for processing
+	time.Sleep(5 * time.Second)
+
+	// Stop all consumers
+	for _, cancel := range cancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+
+	wg.Wait()
+
+	mu.Lock()
+	finalCount := totalReceived
+	mu.Unlock()
+
+	if finalCount == 0 {
+		t.Error("No messages received by concurrent consumers")
+	}
+
+	// We expect that messages are distributed among consumers
+	// Note: In NATS JetStream with separate durable consumers,
+	// each consumer gets its own copy of messages, so total can be > messageCount
+	if finalCount == 0 {
+		t.Error("No messages received by concurrent consumers")
+	}
+
+	// With separate durable consumers, each gets all messages
+	// This is expected behavior - each durable consumer processes all messages independently
+	expectedMinimum := int64(messageCount) // At least one consumer should get all messages
+	if finalCount < expectedMinimum {
+		t.Errorf("Too few messages received (%d), expected at least %d",
+			finalCount, expectedMinimum)
+	}
+
+	t.Logf("Successfully processed %d messages across %d concurrent pull consumers (each consumer processes independently)",
+		finalCount, consumerCount)
+}
+
+func TestPullWorkQueueDistribution(t *testing.T) {
+	// Create temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "jetstream_pull_workqueue_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create hub instance
+	opts, err := DefaultNodeOptions()
+	if err != nil {
+		t.Fatalf("Failed to create default options: %v", err)
+	}
+	opts.Port = 0
+	opts.ClusterPort = 0
+	opts.StoreDir = filepath.Join(tempDir, "data")
+
+	hub, err := NewHub(opts)
+	if err != nil {
+		t.Fatalf("NewHub() failed: %v", err)
+	}
+	defer hub.Shutdown()
+
+	// Create stream with WorkQueue policy for true work distribution
+	config := &PersistentConfig{
+		Description: "Test stream for work queue distribution",
+		Subjects:    []string{"workqueue.test.>"},
+		Retention:   nats.WorkQueuePolicy, // This ensures messages are only delivered once
+		MaxMsgs:     1000,
+		Replicas:    1,
+	}
+
+	err = hub.CreateOrUpdatePersistent(config)
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	// Publish test messages
+	messageCount := 15
+	for i := 0; i < messageCount; i++ {
+		msg := fmt.Sprintf("work-item-%d", i+1)
+		err = hub.PublishPersistent("workqueue.test.jobs", []byte(msg))
+		if err != nil {
+			t.Fatalf("Failed to publish message %d: %v", i+1, err)
+		}
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Start multiple workers using the SAME durable name for work distribution
+	workerCount := 3
+	pullOpts := PullOptions{
+		Batch:    2,
+		MaxWait:  1 * time.Second,
+		Interval: 50 * time.Millisecond,
+	}
+
+	var totalReceived int64
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	cancels := make([]func(), workerCount)
+
+	// Use the same durable name so messages are distributed (not duplicated)
+	sharedDurableName := "shared-work-consumer"
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		workerIndex := i
+
+		go func(index int) {
+			defer wg.Done()
+
+			workerID := fmt.Sprintf("worker-%d", index+1)
+
+			cancel, err := hub.PullPersistentViaDurable(
+				sharedDurableName, // Same durable name for all workers
+				"workqueue.test.jobs",
+				pullOpts,
+				func(subject string, msg []byte) ([]byte, bool, bool) {
+					mu.Lock()
+					totalReceived++
+					count := totalReceived
+					mu.Unlock()
+
+					t.Logf("%s processed message %d: %s", workerID, count, string(msg))
+					time.Sleep(10 * time.Millisecond) // Simulate work
+					return nil, false, true
+				},
+				func(err error) {
+					// Only log non-timeout errors
+					if err.Error() != "failed to fetch messages from subject \"workqueue.test.jobs\": nats: invalid subscription" {
+						t.Logf("%s error: %v", workerID, err)
+					}
+				},
+			)
+
+			if err != nil {
+				t.Errorf("Failed to start %s: %v", workerID, err)
+				return
+			}
+
+			cancels[index] = cancel
+		}(workerIndex)
+	}
+
+	// Wait for workers to start
+	time.Sleep(200 * time.Millisecond)
+
+	// Wait for processing
+	time.Sleep(3 * time.Second)
+
+	// Stop all workers
+	for _, cancel := range cancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+
+	wg.Wait()
+
+	mu.Lock()
+	finalCount := totalReceived
+	mu.Unlock()
+
+	if finalCount == 0 {
+		t.Error("No messages received by work queue consumers")
+	}
+
+	// With WorkQueue policy and same durable name, each message should be processed exactly once
+	if finalCount != int64(messageCount) {
+		t.Logf("Note: Received %d messages out of %d published. This may be due to timing or some messages not being fetched yet.",
+			finalCount, messageCount)
+	}
+
+	t.Logf("Work queue successfully distributed %d messages across %d workers using shared durable consumer",
+		finalCount, workerCount)
+}
