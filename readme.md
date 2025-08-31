@@ -635,7 +635,180 @@ data, revision, err := h.GetFromKeyValueStore("user-settings", "user123")
 
 **Use Cases**: User settings, application configuration, cached data
 
-### 8. Object Store (Large Files)
+### 8. Distributed Locking (Concurrency Control)
+
+Hub provides distributed locking capabilities using NATS Key-Value store, enabling safe coordination across multiple processes and nodes.
+
+```go
+// Create lock bucket
+lockConfig := hub.KeyValueStoreConfig{
+    Bucket:       "distributed-locks",
+    Description:  "Distributed lock coordination",
+    MaxValueSize: hub.NewSizeFromBytes(64),
+    TTL:          30 * time.Second, // Auto-expiry for safety
+    Replicas:     1,
+}
+err := h.CreateOrUpdateKeyValueStore(lockConfig)
+
+// Try to acquire lock (non-blocking)
+cancel, err := h.TryLock("distributed-locks", "resource-123")
+if err != nil {
+    log.Printf("Failed to acquire lock: %v", err)
+    return
+}
+defer cancel() // Always release lock
+
+// Critical section - only one process can execute this
+fmt.Println("Processing exclusive resource...")
+time.Sleep(5 * time.Second)
+
+// Lock is automatically released when cancel() is called
+```
+
+#### Blocking Lock with Context
+
+```go
+// Acquire lock with retry and timeout
+ctx, ctxCancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer ctxCancel()
+
+cancel, err := h.Lock(ctx, "distributed-locks", "shared-resource")
+if err != nil {
+    if errors.Is(err, context.DeadlineExceeded) {
+        log.Println("Failed to acquire lock within timeout")
+    }
+    return
+}
+defer cancel()
+
+// Critical section with automatic retry and exponential backoff
+processSharedResource()
+```
+
+#### Advanced Lock Operations
+
+```go
+// Check if resource is locked
+isLocked, err := h.IsLocked("distributed-locks", "resource-123")
+if err != nil {
+    log.Printf("Failed to check lock status: %v", err)
+}
+
+if isLocked {
+    fmt.Println("Resource is currently locked by another process")
+}
+
+// Force unlock (admin operation)
+err = h.ForceUnlock("distributed-locks", "resource-123")
+if err != nil {
+    log.Printf("Failed to force unlock: %v", err)
+}
+```
+
+#### Lock Usage Patterns
+
+##### Database Migration Lock
+```go
+// Ensure only one instance runs migration
+cancel, err := h.TryLock("app-locks", "db-migration")
+if err != nil {
+    log.Println("Migration already running on another instance")
+    return
+}
+defer cancel()
+
+runDatabaseMigration()
+```
+
+##### Singleton Task Processing
+```go
+// Ensure only one cron job runs at a time
+ctx := context.Background()
+cancel, err := h.Lock(ctx, "cron-locks", "daily-report")
+if err != nil {
+    log.Printf("Daily report already running: %v", err)
+    return
+}
+defer cancel()
+
+generateDailyReport()
+```
+
+##### Resource Pool Management
+```go
+// Lock specific resource from pool
+resourceID := "worker-node-5"
+cancel, err := h.TryLock("resource-pool", resourceID)
+if err != nil {
+    log.Printf("Resource %s is busy, trying another...", resourceID)
+    return
+}
+defer cancel()
+
+useResource(resourceID)
+```
+
+##### Distributed Leader Election
+```go
+// Simple leader election
+cancel, err := h.TryLock("leader-election", "cluster-leader")
+if err != nil {
+    log.Println("Another instance is the leader")
+    return
+}
+defer cancel()
+
+// This instance is now the leader
+runLeaderTasks()
+```
+
+#### Lock Safety Features
+
+- **Atomic Acquisition**: Uses NATS KV `Create` operation for atomic lock acquisition
+- **Automatic TTL**: Locks expire automatically based on KV store TTL to prevent deadlocks
+- **Revision-based Release**: Safe lock release using NATS revision numbers
+- **Context Support**: Timeout and cancellation support for responsive applications
+- **Exponential Backoff**: Built-in retry strategy with configurable delays
+
+#### Lock Best Practices
+
+1. **Always Use Defer**: Ensure locks are released even on panic
+```go
+cancel, err := h.TryLock(bucket, key)
+if err != nil {
+    return err
+}
+defer cancel() // Critical: always release
+```
+
+2. **Set Appropriate TTL**: Configure KV store TTL to prevent deadlocks
+```go
+lockConfig := hub.KeyValueStoreConfig{
+    TTL: 30 * time.Second, // Reasonable TTL
+}
+```
+
+3. **Use Context for Timeouts**: Prevent indefinite waiting
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+lockCancel, err := h.Lock(ctx, bucket, key)
+```
+
+4. **Handle Lock Contention**: Graceful handling when locks are busy
+```go
+cancel, err := h.TryLock(bucket, key)
+if err != nil {
+    // Try alternative approach or queue the work
+    scheduleForLater(task)
+    return
+}
+defer cancel()
+```
+
+**Use Cases**: Database migrations, singleton tasks, resource coordination, leader election, critical sections
+
+### 9. Object Store (Large Files)
 
 ```go
 // Create document store
@@ -890,6 +1063,12 @@ for i := 0; i < 10; i++ {
 - `UpdateToKeyValueStore(bucket, key, value, expectedRevision)` - Update with version check
 - `DeleteFromKeyValueStore(bucket, key)` - Delete key
 
+### Distributed Locking (Distributed Locking)
+- `TryLock(bucket, key)` - Non-blocking lock acquisition
+- `Lock(ctx, bucket, key)` - Blocking lock acquisition with retry
+- `IsLocked(bucket, key)` - Check if resource is locked
+- `ForceUnlock(bucket, key)` - Force release lock (admin operation)
+
 ### Object Store (Object Store)
 - `CreateObjectStore(config)` - Create object store
 - `GetFromObjectStore(bucket, key)` - Retrieve object
@@ -931,6 +1110,7 @@ In JetStream, ACK indicates message processing completion:
 | **JetStream Publish/Subscribe** | ✅ | ✅ | ❌ | Event sourcing, audit logs |
 | **JetStream QueueSub** | ✅ | ✅ | ✅ | Batch processing, reliability-critical tasks |
 | **Key-Value Store** | ✅ | ✅ | ❌ | Configuration, cache, metadata |
+| **Distributed Locking** | ✅ | ✅ | ❌ | Critical sections, coordination, leader election |
 | **Object Store** | ✅ | ✅ | ❌ | File storage, large data |
 
 ### Selection Criteria:
@@ -939,6 +1119,7 @@ In JetStream, ACK indicates message processing completion:
 - **Data persistence required**: JetStream, KV Store, Object Store
 - **Task distribution required**: QueueSub pattern
 - **Response required**: Request/Reply
+- **Coordination required**: Distributed Locking
 - **Large data**: Object Store
 - **Frequent read/write**: Key-Value Store
 
