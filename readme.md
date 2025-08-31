@@ -1428,6 +1428,63 @@ opts := &hub.Options{
 
 ### Error Handling Patterns
 
+#### Pull Consumer Error Recovery
+
+Pull consumers implement automatic error recovery with a retry limit to prevent infinite loops:
+
+```go
+// Pull consumers automatically handle errors with retry limits
+cancel, err := h.PullPersistentViaDurable(
+    "worker-1",
+    "tasks.process",
+    hub.PullOptions{
+        Batch:    10,
+        MaxWait:  5 * time.Second,
+        Interval: 100 * time.Millisecond,
+    },
+    func(subject string, msg []byte) ([]byte, bool, bool) {
+        // Process message
+        return nil, false, true
+    },
+    func(err error) {
+        // Error handler receives all errors with retry count
+        log.Printf("Pull consumer error: %v", err)
+        // Format: "failed to fetch messages from subject "tasks.process": nats: invalid subscription (count=3)"
+    },
+)
+
+// Consumer will automatically stop after 5 consecutive errors
+// Common error scenarios:
+// - Network disconnections
+// - Invalid subscriptions (subscription lifecycle events)
+// - Stream deletions
+// - Server shutdowns
+```
+
+**Error Recovery Behavior:**
+- **Timeout Errors**: Ignored (normal when no messages available)
+- **Consecutive Errors**: Counted up to 5 attempts
+- **Automatic Shutdown**: Consumer stops after 5 consecutive non-timeout errors
+- **Error Context**: Each error includes retry count for monitoring
+
+**Best Practices:**
+```go
+// Monitor error patterns in your error handler
+func pullErrorHandler(err error) {
+    if strings.Contains(err.Error(), "count=") {
+        // Extract retry count for alerting
+        log.Printf("Pull consumer error with retry count: %v", err)
+    }
+    
+    if strings.Contains(err.Error(), "invalid subscription") {
+        // Normal subscription lifecycle event - consumer will stop gracefully
+        log.Printf("Consumer stopping due to subscription lifecycle: %v", err)
+    }
+}
+```
+
+#### General Application Error Handling
+
 ```go
 // Retry logic
 func publishWithRetry(h *hub.Hub, subject string, msg []byte, maxRetries int) error {
