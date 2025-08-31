@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,4 +107,86 @@ func (h *Hub) PurgeKeyValueStore(bucket, key string) error {
 	}
 
 	return nil
+}
+
+func (h *Hub) DeleteKeyValueStore(bucket string) error {
+	if err := h.jetstreamCtx.DeleteKeyValue(bucket); err != nil {
+		return fmt.Errorf("failed to delete key-value store %q: %w", bucket, err)
+	}
+
+	return nil
+}
+
+const lockValue = "locked"
+
+func (h *Hub) TryLock(bucket, key string) (cancel func(), err error) {
+	kv, err := h.jetstreamCtx.KeyValue(bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access key-value store %q: %w", bucket, err)
+	}
+
+	revision, err := kv.Create(key, []byte(lockValue))
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock key %q in bucket %q: %w", key, bucket, err)
+	}
+
+	return func() {
+		_ = kv.Delete(key, nats.LastRevision(revision))
+	}, nil
+}
+
+func (h *Hub) Lock(ctx context.Context, bucket, key string) (cancel func(), err error) {
+	currentDelay := time.Millisecond * 10
+	const backOffFactor = 2
+	const maxDelay = 5 * time.Second
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		cancel, err = h.TryLock(bucket, key)
+		if err == nil {
+			return cancel, nil
+		}
+		if !errors.Is(err, nats.ErrKeyExists) {
+			return nil, fmt.Errorf("failed to lock key %q in bucket %q: %w", key, bucket, err)
+		}
+		time.Sleep(currentDelay)
+		currentDelay *= backOffFactor
+		if currentDelay > maxDelay {
+			currentDelay = maxDelay
+		}
+	}
+}
+
+func (h *Hub) ForceUnlock(bucket, key string) error {
+	kv, err := h.jetstreamCtx.KeyValue(bucket)
+	if err != nil {
+		return fmt.Errorf("failed to access key-value store %q: %w", bucket, err)
+	}
+
+	if err := kv.Delete(key); err != nil {
+		return fmt.Errorf("failed to force unlock key %q in bucket %q: %w", key, bucket, err)
+	}
+
+	return nil
+}
+
+func (h *Hub) IsLocked(bucket, key string) (bool, error) {
+	kv, err := h.jetstreamCtx.KeyValue(bucket)
+	if err != nil {
+		return false, fmt.Errorf("failed to access key-value store %q: %w", bucket, err)
+	}
+
+	_, err = kv.Get(key)
+	if err != nil {
+		if err == nats.ErrKeyNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get key %q from bucket %q: %w", key, bucket, err)
+	}
+
+	return true, nil
 }
