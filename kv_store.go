@@ -138,7 +138,7 @@ func (h *Hub) TryLock(bucket, key string) (cancel func(), err error) {
 func (h *Hub) Lock(ctx context.Context, bucket, key string) (cancel func(), err error) {
 	currentDelay := time.Millisecond * 10
 	const backOffFactor = 2
-	const maxDelay = 5 * time.Second
+	const maxDelay = 2 * time.Second
 	for {
 		select {
 		case <-ctx.Done():
