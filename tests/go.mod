@@ -2,7 +2,7 @@ module tests
 
 go 1.25.0
 
-require github.com/snowmerak/hub v0.0.0-00010101000000-000000000000
+require github.com/rivulet-io/hub v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/google/go-tpm v0.9.5 // indirect
@@ -18,4 +18,4 @@ require (
 	golang.org/x/time v0.12.0 // indirect
 )
 
-replace github.com/snowmerak/hub => ../
+replace github.com/rivulet-io/hub => ../

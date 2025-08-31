@@ -1,4 +1,4 @@
-module github.com/snowmerak/hub
+module github.com/rivulet-io/hub
 
 go 1.25.0
 

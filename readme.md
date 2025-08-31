@@ -28,7 +28,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/snowmerak/hub"
+    "github.com/rivulet-io/hub"
 )
 
 func main() {
@@ -76,7 +76,7 @@ import (
     "net/url"
     "time"
 
-    "github.com/snowmerak/hub"
+    "github.com/rivulet-io/hub"
 )
 
 func main() {
@@ -116,7 +116,7 @@ import (
     "net/url"
     "time"
 
-    "github.com/snowmerak/hub"
+    "github.com/rivulet-io/hub"
 )
 
 func main() {

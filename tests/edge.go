@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowmerak/hub"
+	"github.com/rivulet-io/hub"
 )
 
 // EdgeNode represents an edge (leaf) node that connects to a central hub

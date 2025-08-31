@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowmerak/hub"
+	"github.com/rivulet-io/hub"
 )
 
 // ClusterNode represents a node in the cluster

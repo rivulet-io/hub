@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowmerak/hub"
+	"github.com/rivulet-io/hub"
 )
 
 // NATS retention policy constants (since we can't import nats package directly)

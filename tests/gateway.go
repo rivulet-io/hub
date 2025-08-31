@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowmerak/hub"
+	"github.com/rivulet-io/hub"
 )
 
 // GatewayNode represents a gateway that connects multiple NATS networks
 type GatewayNode struct {
-	ID           string
-	Hub          *hub.Hub
-	StoreDir     string
-	Port         int
-	GatewayPort  int
-	Options      *hub.Options
+	ID            string
+	Hub           *hub.Hub
+	StoreDir      string
+	Port          int
+	GatewayPort   int
+	Options       *hub.Options
 	ConnectedNets []string // Connected network names
 }
 
@@ -94,10 +94,10 @@ func testGatewayNodeCreation(tempDir string) error {
 		return fmt.Errorf("failed to create default gateway options: %w", err)
 	}
 
-	opts.Port = 4280          // Client port
-	opts.GatewayPort = 0      // Disable gateway port for basic test 
-	opts.ClusterPort = 0      // Disable clustering for basic test
-	opts.LeafNodePort = 0     // Disable leaf nodes for basic test
+	opts.Port = 4280      // Client port
+	opts.GatewayPort = 0  // Disable gateway port for basic test
+	opts.ClusterPort = 0  // Disable clustering for basic test
+	opts.LeafNodePort = 0 // Disable leaf nodes for basic test
 	opts.StoreDir = filepath.Join(tempDir, "gateway_creation_test")
 	opts.Name = "test-gateway-node"
 
@@ -166,7 +166,7 @@ func testGatewayNetworkDiscovery(tempDir string) error {
 	netBOpts.LeafNodePort = 0
 	netBOpts.StoreDir = filepath.Join(tempDir, "network_b")
 	netBOpts.Name = "gateway-net-b"
-	
+
 	// Note: Actual gateway routes would require proper NATS cluster configuration
 	// For testing purposes, we validate the configuration structure
 
@@ -351,7 +351,7 @@ func testGatewayMessageForwarding(tempDir string) error {
 
 	// Verify both subscribers received the message
 	timeout := time.After(3 * time.Second)
-	
+
 	select {
 	case msg := <-received1:
 		if string(msg) != string(testMsg) {
@@ -397,7 +397,7 @@ func testGatewayLoadBalancing(tempDir string) error {
 
 	// Test queue-based load balancing
 	fmt.Println("Testing queue-based load balancing...")
-	
+
 	queueReceived := make(chan string, 20)
 	var queueMutex sync.Mutex
 	processedBy := make(map[string]int)
@@ -439,7 +439,7 @@ func testGatewayLoadBalancing(tempDir string) error {
 	// Wait for all messages to be processed
 	processedCount := 0
 	timeout := time.After(8 * time.Second)
-	
+
 	for processedCount < messageCount {
 		select {
 		case <-queueReceived:
@@ -490,7 +490,7 @@ func testGatewayJetStreamOperations(tempDir string) error {
 	opts.LeafNodePort = 0
 	opts.StoreDir = filepath.Join(tempDir, "jetstream_gateway")
 	opts.Name = "jetstream-gateway"
-	
+
 	// Gateways can support JetStream for cross-network stream replication
 	opts.JetstreamMaxMemory = hub.NewSizeFromMegabytes(128)
 	opts.JetstreamMaxStorage = hub.NewSizeFromGigabytes(2)
@@ -503,7 +503,7 @@ func testGatewayJetStreamOperations(tempDir string) error {
 
 	// Test persistent stream creation
 	fmt.Println("Testing persistent stream creation on gateway...")
-	
+
 	streamConfig := &hub.PersistentConfig{
 		Description: "Gateway cross-network stream",
 		Subjects:    []string{"gateway.stream.>"},
@@ -538,7 +538,7 @@ func testGatewayKeyValueStore(tempDir string) error {
 	opts.LeafNodePort = 0
 	opts.StoreDir = filepath.Join(tempDir, "kv_gateway")
 	opts.Name = "kv-gateway"
-	
+
 	// Enable JetStream for KV store
 	opts.JetstreamMaxMemory = hub.NewSizeFromMegabytes(128)
 	opts.JetstreamMaxStorage = hub.NewSizeFromGigabytes(2)
@@ -551,7 +551,7 @@ func testGatewayKeyValueStore(tempDir string) error {
 
 	// Test KV store creation
 	fmt.Println("Testing KV store creation on gateway...")
-	
+
 	kvConfig := hub.KeyValueStoreConfig{
 		Bucket:       "gateway_shared_config",
 		Description:  "Gateway cross-network configuration store",
@@ -585,7 +585,7 @@ func testGatewayObjectStore(tempDir string) error {
 	opts.LeafNodePort = 0
 	opts.StoreDir = filepath.Join(tempDir, "obj_gateway")
 	opts.Name = "obj-gateway"
-	
+
 	// Enable JetStream for Object store
 	opts.JetstreamMaxMemory = hub.NewSizeFromMegabytes(128)
 	opts.JetstreamMaxStorage = hub.NewSizeFromGigabytes(2)
@@ -598,7 +598,7 @@ func testGatewayObjectStore(tempDir string) error {
 
 	// Test object store creation
 	fmt.Println("Testing object store creation on gateway...")
-	
+
 	objConfig := hub.ObjectStoreConfig{
 		Bucket:      "gateway_shared_files",
 		Description: "Gateway cross-network file storage",
@@ -675,79 +675,79 @@ func testGatewayResourceManagement(tempDir string) error {
 func testMultiGatewayCommunication(tempDir string) error {
 	fmt.Println("Testing multi-gateway communication...")
 	fmt.Println("Setting up: 3 separate networks connected via multiple gateways")
-	
+
 	// Step 1: Create Network A
 	fmt.Println("Step 1: Creating Network A")
-	
+
 	netAOpts, err := hub.DefaultGatewayOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create options for Network A: %w", err)
 	}
-	
+
 	netAOpts.Port = 4296
 	netAOpts.GatewayPort = 0 // Disable for test compatibility
 	netAOpts.ClusterPort = 0
 	netAOpts.LeafNodePort = 0
 	netAOpts.StoreDir = filepath.Join(tempDir, "multi_gateway_a")
 	netAOpts.Name = "multi-gateway-net-a"
-	
+
 	netAHub, err := hub.NewHub(netAOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create Network A: %w", err)
 	}
 	defer netAHub.Shutdown()
-	
+
 	// Step 2: Create Network B
 	fmt.Println("Step 2: Creating Network B")
-	
+
 	netBOpts, err := hub.DefaultGatewayOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create options for Network B: %w", err)
 	}
-	
+
 	netBOpts.Port = 4297
 	netBOpts.GatewayPort = 0 // Disable for test compatibility
 	netBOpts.ClusterPort = 0
 	netBOpts.LeafNodePort = 0
 	netBOpts.StoreDir = filepath.Join(tempDir, "multi_gateway_b")
 	netBOpts.Name = "multi-gateway-net-b"
-	
+
 	netBHub, err := hub.NewHub(netBOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create Network B: %w", err)
 	}
 	defer netBHub.Shutdown()
-	
+
 	// Step 3: Create Network C
 	fmt.Println("Step 3: Creating Network C")
-	
+
 	netCOpts, err := hub.DefaultGatewayOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create options for Network C: %w", err)
 	}
-	
+
 	netCOpts.Port = 4298
 	netCOpts.GatewayPort = 0 // Disable for test compatibility
 	netCOpts.ClusterPort = 0
 	netCOpts.LeafNodePort = 0
 	netCOpts.StoreDir = filepath.Join(tempDir, "multi_gateway_c")
 	netCOpts.Name = "multi-gateway-net-c"
-	
+
 	netCHub, err := hub.NewHub(netCOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create Network C: %w", err)
 	}
 	defer netCHub.Shutdown()
-	
+
 	time.Sleep(2 * time.Second)
-	
+
 	// Step 4: Test multi-hop communication pattern
 	fmt.Println("Step 4: Testing multi-hop communication pattern")
 	fmt.Println("Simulating: A -> B -> C and C -> B -> A routing")
-	
+
 	// Set up message routing chain
 	messages := make(chan string, 10)
-	
+
 	// Network C listens for final messages
 	cancelC, err := netCHub.SubscribeVolatileViaFanout("multi.hop.final", func(subject string, msg []byte) ([]byte, bool) {
 		messages <- fmt.Sprintf("Network C received final: %s", string(msg))
@@ -759,7 +759,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create Network C subscription: %w", err)
 	}
 	defer cancelC()
-	
+
 	// Network B acts as intermediate router
 	cancelB, err := netBHub.SubscribeVolatileViaFanout("multi.hop.intermediate", func(subject string, msg []byte) ([]byte, bool) {
 		messages <- fmt.Sprintf("Network B routing: %s", string(msg))
@@ -777,7 +777,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create Network B subscription: %w", err)
 	}
 	defer cancelB()
-	
+
 	// Network A listens for return messages
 	cancelA, err := netAHub.SubscribeVolatileViaFanout("multi.hop.return", func(subject string, msg []byte) ([]byte, bool) {
 		messages <- fmt.Sprintf("Network A received return: %s", string(msg))
@@ -789,31 +789,31 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create Network A subscription: %w", err)
 	}
 	defer cancelA()
-	
+
 	time.Sleep(1 * time.Second)
-	
+
 	// Step 5: Test message routing patterns
 	fmt.Println("Step 5: Testing message routing patterns")
-	
+
 	// Test A -> B -> C routing
 	testMsg1 := []byte("Message from A to C via B")
 	err = netBHub.PublishVolatile("multi.hop.intermediate", testMsg1)
 	if err != nil {
 		return fmt.Errorf("failed to publish A->B->C message: %w", err)
 	}
-	
+
 	// Test direct communication simulation
 	testMsg2 := []byte("Direct message from A")
 	err = netAHub.PublishVolatile("multi.hop.return", testMsg2)
 	if err != nil {
 		return fmt.Errorf("failed to publish return message: %w", err)
 	}
-	
+
 	// Verify messages received
 	receivedCount := 0
 	expectedMessages := 3 // B routing + C final + A return
 	timeout := time.After(8 * time.Second)
-	
+
 	for receivedCount < expectedMessages {
 		select {
 		case msg := <-messages:
@@ -823,12 +823,12 @@ func testMultiGatewayCommunication(tempDir string) error {
 			return fmt.Errorf("timeout waiting for multi-hop messages (received %d/%d)", receivedCount, expectedMessages)
 		}
 	}
-	
+
 	// Step 6: Test broadcast pattern
 	fmt.Println("Step 6: Testing multi-network broadcast pattern")
-	
+
 	broadcastReceived := make(chan string, 10)
-	
+
 	// All networks listen for broadcast
 	cancelBcastA, err := netAHub.SubscribeVolatileViaFanout("multi.broadcast", func(subject string, msg []byte) ([]byte, bool) {
 		broadcastReceived <- fmt.Sprintf("Net A: %s", string(msg))
@@ -840,7 +840,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create broadcast subscription A: %w", err)
 	}
 	defer cancelBcastA()
-	
+
 	cancelBcastB, err := netBHub.SubscribeVolatileViaFanout("multi.broadcast", func(subject string, msg []byte) ([]byte, bool) {
 		broadcastReceived <- fmt.Sprintf("Net B: %s", string(msg))
 		return nil, false
@@ -851,7 +851,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create broadcast subscription B: %w", err)
 	}
 	defer cancelBcastB()
-	
+
 	cancelBcastC, err := netCHub.SubscribeVolatileViaFanout("multi.broadcast", func(subject string, msg []byte) ([]byte, bool) {
 		broadcastReceived <- fmt.Sprintf("Net C: %s", string(msg))
 		return nil, false
@@ -862,32 +862,32 @@ func testMultiGatewayCommunication(tempDir string) error {
 		return fmt.Errorf("failed to create broadcast subscription C: %w", err)
 	}
 	defer cancelBcastC()
-	
+
 	time.Sleep(1 * time.Second)
-	
+
 	// Simulate gateway broadcast (each network publishes to its own topic)
 	broadcastMsg := []byte("Multi-network broadcast message")
-	
+
 	err = netAHub.PublishVolatile("multi.broadcast", broadcastMsg)
 	if err != nil {
 		return fmt.Errorf("failed to publish broadcast from A: %w", err)
 	}
-	
+
 	err = netBHub.PublishVolatile("multi.broadcast", broadcastMsg)
 	if err != nil {
 		return fmt.Errorf("failed to publish broadcast from B: %w", err)
 	}
-	
+
 	err = netCHub.PublishVolatile("multi.broadcast", broadcastMsg)
 	if err != nil {
 		return fmt.Errorf("failed to publish broadcast from C: %w", err)
 	}
-	
+
 	// Verify broadcast messages
 	bcastCount := 0
 	expectedBcast := 3 // One from each network
 	timeout = time.After(5 * time.Second)
-	
+
 	for bcastCount < expectedBcast {
 		select {
 		case msg := <-broadcastReceived:
@@ -897,7 +897,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 			return fmt.Errorf("timeout waiting for broadcast messages (received %d/%d)", bcastCount, expectedBcast)
 		}
 	}
-	
+
 	// Summary
 	fmt.Println("\n=== Multi-Gateway Test Summary ===")
 	fmt.Printf("✓ Created 3 separate networks (A, B, C)\n")
@@ -905,7 +905,7 @@ func testMultiGatewayCommunication(tempDir string) error {
 	fmt.Printf("✓ Validated message routing and forwarding\n")
 	fmt.Printf("✓ Tested multi-network broadcast pattern\n")
 	fmt.Printf("✓ Simulated gateway mesh communication\n")
-	
+
 	fmt.Println("✓ Multi-gateway communication test successful")
 	return nil
 }
@@ -913,78 +913,78 @@ func testMultiGatewayCommunication(tempDir string) error {
 func testGatewayClusterIntegration(tempDir string) error {
 	fmt.Println("Testing gateway cluster integration...")
 	fmt.Println("Creating simplified cluster setup for debugging...")
-	
+
 	// Step 1: Create single seed node first
 	fmt.Println("Step 1: Creating single seed node...")
-	
+
 	opts1, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options: %w", err)
 	}
-	
+
 	opts1.Port = 4350
 	opts1.ClusterPort = 0
 	opts1.LeafNodePort = 0
 	opts1.StoreDir = filepath.Join(tempDir, "simple_node_1")
 	opts1.Name = "simple-node-1"
 	opts1.Routes = nil
-	
+
 	fmt.Printf("Creating seed node - Client: %d, Cluster: %d\n", opts1.Port, opts1.ClusterPort)
-	
+
 	h1, err := hub.NewHub(opts1)
 	if err != nil {
 		return fmt.Errorf("failed to create seed node: %w", err)
 	}
 	defer h1.Shutdown()
-	
+
 	fmt.Println("✓ Seed node created successfully")
 	time.Sleep(3 * time.Second)
-	
+
 	// Step 2: Create second independent node (not clustered yet)
 	fmt.Println("Step 2: Creating second independent node...")
-	
+
 	opts2, err := hub.DefaultNodeOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create default options for node 2: %w", err)
 	}
-	
+
 	opts2.Port = 4351
 	opts2.ClusterPort = 0 // Also independent for now
 	opts2.LeafNodePort = 0
 	opts2.StoreDir = filepath.Join(tempDir, "simple_node_2")
 	opts2.Name = "simple-node-2"
 	opts2.Routes = nil
-	
+
 	fmt.Printf("Creating independent node - Client: %d, Cluster: %d\n", opts2.Port, opts2.ClusterPort)
-	
+
 	h2, err := hub.NewHub(opts2)
 	if err != nil {
 		return fmt.Errorf("failed to create second node: %w", err)
 	}
 	defer h2.Shutdown()
-	
+
 	fmt.Println("✓ Second node created successfully")
 	time.Sleep(3 * time.Second)
-	
+
 	// Step 3: Test basic functionality on both nodes
 	fmt.Println("Step 3: Testing basic functionality...")
-	
+
 	testMsg := []byte("Simple cluster test message")
 	err = h1.PublishVolatile("test.simple.1", testMsg)
 	if err != nil {
 		return fmt.Errorf("node 1 is not operational: %w", err)
 	}
-	
+
 	err = h2.PublishVolatile("test.simple.2", testMsg)
 	if err != nil {
 		return fmt.Errorf("node 2 is not operational: %w", err)
 	}
-	
+
 	fmt.Println("✓ Both nodes are operational")
-	
+
 	// Step 4: Create simple persistent streams on both
 	fmt.Println("Step 4: Testing persistent streams...")
-	
+
 	streamConfig1 := &hub.PersistentConfig{
 		Description: "Simple stream 1",
 		Subjects:    []string{"simple.stream.1.>"},
@@ -992,12 +992,12 @@ func testGatewayClusterIntegration(tempDir string) error {
 		MaxMsgs:     100,
 		Replicas:    1,
 	}
-	
+
 	err = h1.CreateOrUpdatePersistent(streamConfig1)
 	if err != nil {
 		return fmt.Errorf("failed to create stream on node 1: %w", err)
 	}
-	
+
 	streamConfig2 := &hub.PersistentConfig{
 		Description: "Simple stream 2",
 		Subjects:    []string{"simple.stream.2.>"},
@@ -1005,14 +1005,14 @@ func testGatewayClusterIntegration(tempDir string) error {
 		MaxMsgs:     100,
 		Replicas:    1,
 	}
-	
+
 	err = h2.CreateOrUpdatePersistent(streamConfig2)
 	if err != nil {
 		return fmt.Errorf("failed to create stream on node 2: %w", err)
 	}
-	
+
 	fmt.Println("✓ Persistent streams created on both nodes")
-	
+
 	// Step 5: Publish some data
 	for i := 0; i < 3; i++ {
 		msg1 := []byte(fmt.Sprintf("Node 1 data %d", i))
@@ -1020,16 +1020,16 @@ func testGatewayClusterIntegration(tempDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to publish to stream 1: %w", err)
 		}
-		
+
 		msg2 := []byte(fmt.Sprintf("Node 2 data %d", i))
 		err = h2.PublishPersistent("simple.stream.2.data", msg2)
 		if err != nil {
 			return fmt.Errorf("failed to publish to stream 2: %w", err)
 		}
 	}
-	
+
 	fmt.Println("✓ Data published to both streams")
-	
+
 	// Summary
 	fmt.Println("\n=== Simplified Cluster Test Summary ===")
 	fmt.Printf("✓ Created 2 independent nodes\n")
@@ -1037,7 +1037,7 @@ func testGatewayClusterIntegration(tempDir string) error {
 	fmt.Printf("✓ Persistent streams working\n")
 	fmt.Printf("✓ Data publishing successful\n")
 	fmt.Printf("⚠ Note: This is a simplified test without actual clustering\n")
-	
+
 	fmt.Println("✓ Gateway cluster integration test successful")
 	return nil
 }
