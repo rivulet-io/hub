@@ -162,6 +162,8 @@ func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, opti
 
 	cancelFunc := make(chan struct{})
 	go func() {
+		const maxErrCount = 5
+		errCount := 0
 		for {
 			select {
 			case <-cancelFunc:
@@ -169,7 +171,11 @@ func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, opti
 			default:
 				msgs, err := sub.Fetch(option.Batch, nats.MaxWait(option.MaxWait))
 				if err != nil && err != nats.ErrTimeout {
-					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
+					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w (count=%d)", subject, err, errCount))
+					errCount++
+					if errCount >= maxErrCount {
+						return
+					}
 					continue
 				}
 				for _, msg := range msgs {
@@ -242,6 +248,8 @@ func (h *Hub) PullPersistentViaEphemeral(subject string, option PullOptions, han
 
 	cancelFunc := make(chan struct{})
 	go func() {
+		const maxErrCount = 5
+		errCount := 0
 		for {
 			select {
 			case <-cancelFunc:
@@ -249,7 +257,11 @@ func (h *Hub) PullPersistentViaEphemeral(subject string, option PullOptions, han
 			default:
 				msgs, err := sub.Fetch(option.Batch, nats.MaxWait(option.MaxWait))
 				if err != nil && err != nats.ErrTimeout {
-					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
+					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w (count=%d)", subject, err, errCount))
+					errCount++
+					if errCount >= maxErrCount {
+						return
+					}
 					continue
 				}
 				for _, msg := range msgs {
