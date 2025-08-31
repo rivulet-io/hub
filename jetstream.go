@@ -67,6 +67,12 @@ type PersistentConfig struct {
 	Metadata map[string]string
 }
 
+type PullOptions struct {
+	Batch    int
+	MaxWait  time.Duration
+	Interval time.Duration
+}
+
 func (h *Hub) CreateOrUpdatePersistent(cfg *PersistentConfig) error {
 	if len(cfg.Subjects) == 0 {
 		return fmt.Errorf("subjects cannot be empty")
@@ -138,10 +144,20 @@ func (h *Hub) SubscribePersistentViaDurable(subscriberID string, subject string,
 	}, nil
 }
 
-func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, batch int, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
+func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, option PullOptions, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
 	sub, err := h.jetstreamCtx.PullSubscribe(subject, subscriberID, nats.ManualAck())
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to subject %q: %w", subject, err)
+	}
+
+	if option.Batch <= 0 {
+		option.Batch = 5
+	}
+	if option.MaxWait <= 0 {
+		option.MaxWait = 5 * time.Second
+	}
+	if option.Interval <= 0 {
+		option.Interval = 100 * time.Millisecond
 	}
 
 	cancelFunc := make(chan struct{})
@@ -151,7 +167,7 @@ func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, batc
 			case <-cancelFunc:
 				return
 			default:
-				msgs, err := sub.Fetch(batch)
+				msgs, err := sub.Fetch(option.Batch, nats.MaxWait(option.MaxWait))
 				if err != nil && err != nats.ErrTimeout {
 					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
 					continue
@@ -170,6 +186,7 @@ func (h *Hub) PullPersistentViaDurable(subscriberID string, subject string, batc
 						errHandler(fmt.Errorf("failed to respond to message on subject %q: %w", msg.Subject, err))
 					}
 				}
+				time.Sleep(option.Interval)
 			}
 		}
 	}()
@@ -207,11 +224,22 @@ func (h *Hub) SubscribePersistentViaEphemeral(subject string, handler func(subje
 	}, nil
 }
 
-func (h *Hub) PullPersistentViaEphemeral(subject string, batch int, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
+func (h *Hub) PullPersistentViaEphemeral(subject string, option PullOptions, handler func(subject string, msg []byte) (response []byte, reply bool, ack bool), errHandler func(error)) (cancel func(), err error) {
 	sub, err := h.jetstreamCtx.PullSubscribe(subject, "", nats.ManualAck())
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to subject %q: %w", subject, err)
 	}
+
+	if option.Batch <= 0 {
+		option.Batch = 5
+	}
+	if option.MaxWait <= 0 {
+		option.MaxWait = 5 * time.Second
+	}
+	if option.Interval <= 0 {
+		option.Interval = 100 * time.Millisecond
+	}
+
 	cancelFunc := make(chan struct{})
 	go func() {
 		for {
@@ -219,7 +247,7 @@ func (h *Hub) PullPersistentViaEphemeral(subject string, batch int, handler func
 			case <-cancelFunc:
 				return
 			default:
-				msgs, err := sub.Fetch(batch)
+				msgs, err := sub.Fetch(option.Batch, nats.MaxWait(option.MaxWait))
 				if err != nil && err != nats.ErrTimeout {
 					errHandler(fmt.Errorf("failed to fetch messages from subject %q: %w", subject, err))
 					continue
@@ -239,8 +267,10 @@ func (h *Hub) PullPersistentViaEphemeral(subject string, batch int, handler func
 					}
 				}
 			}
+			time.Sleep(option.Interval)
 		}
 	}()
+
 	return func() {
 		close(cancelFunc)
 		if err := sub.Unsubscribe(); err != nil {
